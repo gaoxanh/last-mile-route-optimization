@@ -3,7 +3,7 @@ PRAGMA foreign_keys = ON;
 
 -- 1. Bảng Hubs (Kho hàng / Trạm giao nhận)
 CREATE TABLE IF NOT EXISTS hubs (
-    hub_id STRING PRIMARY KEY AUTOINCREMENT,
+    hub_id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     latitude REAL NOT NULL,
     longitude REAL NOT NULL
