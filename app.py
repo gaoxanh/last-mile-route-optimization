@@ -93,7 +93,7 @@ st.markdown(
 <style>
 :root {
   --forest:#263425; --eco:#394C38; --eco-2:#4F6B4C; --sage:#7E9974;
-  --mint:#EAF2E8; --canvas:#F6F8F5; --card:#FFFFFF; --line:#D8E2D5;
+  --mint:#EAF2E8; --canvas:#FFFFFF; --card:#FFFFFF; --line:#D8E2D5;
   --text:#263425; --muted:#71806F; --amber:#A56B16; --amber-bg:#FFF5E5;
 }
 html, body, [class*="css"] {font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;}
@@ -151,9 +151,34 @@ h3 {font-size:16px!important;}
 .page-heading p {margin:5px 0 0; color:var(--muted); font-size:13px;}
 .section-label {margin:20px 0 10px; font-size:16px; font-weight:800; color:var(--forest);}
 
-.metric-grid {display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin:8px 0 16px;}
-.metric-card {min-height:102px; display:flex; align-items:center; gap:14px; padding:18px;
-  background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:0 4px 13px rgba(47,68,46,.045);}
+.metric-grid {
+    display: grid; 
+    grid-template-columns: repeat(4, minmax(0,1fr)); 
+    gap: 16px; 
+    margin: 12px 0 20px;
+}
+
+.metric-card {
+    min-height: 104px; 
+    display: flex; 
+    align-items: center; 
+    gap: 16px; 
+    padding: 18px 20px;
+    background: #ffffff !important; 
+    border: 1px solid #D2E2CE !important; 
+    border-radius: 16px !important; 
+    /* Đổ bóng rêu mịn màng diện rộng tạo độ nổi bật */
+    box-shadow: 0 10px 25px rgba(57, 76, 56, 0.05) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Hiệu ứng nhấc nhẹ thẻ lên cao và đổi màu viền khi tương tác */
+.metric-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--eco) !important;
+    box-shadow: 0 14px 32px rgba(57, 76, 56, 0.1) !important;
+}
+
 .metric-icon {flex:0 0 43px; width:43px; height:43px; display:grid; place-items:center;
   border-radius:11px; color:var(--eco); background:var(--mint); font-size:21px;}
 .metric-label {font-size:12px; font-weight:700; color:var(--muted); margin-bottom:5px;}

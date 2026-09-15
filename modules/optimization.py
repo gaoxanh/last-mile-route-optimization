@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import altair as alt
 
 try:
     import pydeck as pdk
@@ -237,7 +238,7 @@ with st.expander("⚙️ Optimization settings", expanded=True):
     preview_df = pd.read_csv(CSV_PATH)
     urgent_options = preview_df["order_id"].astype(str).tolist()
     urgent_order_id = st.selectbox("🚨 Chỉ định Đơn hàng Ưu tiên (Urgent)", urgent_options, index=0)
-    scenario = st.selectbox("🌧️ Kịch bản điều kiện tuyến đường (Scenario)", ["Normal", "Traffic", "Weather", "All"])
+    scenario = st.selectbox("🌧️ Kịch bản điều kiện tuyến đường (Scenario)", ["Normal", "Traffic", "Weather", "Both"])
 
     run_btn = st.button("🚀 Thực thi tối ưu hóa toàn tuyến", type="primary", use_container_width=True)
 
@@ -287,6 +288,10 @@ if run_btn:
     active_duration_matrix = [row[:] for row in duration_matrix]
     hazards = []
 
+    # Giữ danh sách sự cố gốc riêng cho UI. Không để kết quả reroute
+    # loại mất sự cố đã được né khỏi bản đồ khi chọn scenario = All.
+    display_hazards = []
+
     # Geometry tuyến trước sự cố được dùng để chọn và hiển thị điểm nghẽn.
     fcfs_road = road_routing.get_route_legs(fcfs_points)
     baseline_optimized_road = road_routing.get_route_legs([fcfs["hub"]] + [
@@ -311,7 +316,7 @@ if run_btn:
             blocked_positions = [pos_traffic]
         elif scenario == "Weather":
             blocked_positions = [pos_weather]
-        elif scenario == "All":
+        elif scenario == "Both":
             blocked_positions = [pos_traffic, pos_weather]   # Bật cả 2 chặng cùng lúc
 
         disruptions = []
@@ -348,6 +353,9 @@ if run_btn:
                 bidirectional=False,
                 reason=scenario,
             ))
+        # Tại đây hazards luôn chứa đầy đủ các sự cố của scenario đã chọn
+        # (Both = Traffic + Weather). Tạo bản sao trước khi lọc reroute_hazards.
+        display_hazards = [dict(hazard) for hazard in hazards]
 
         # Áp dụng hình phạt vào ma trận nền để ép bộ não 2-opt bẻ làn
         active_distance_matrix, active_duration_matrix = apply_penalties(
@@ -403,7 +411,7 @@ if run_btn:
                 hazards[0]["point"],
             )
 
-            st.write("Final route clearance:", final_clearance)
+            #st.write("Final route clearance:", final_clearance)
 
             # Không cho UI hiển thị tuyến cũ dưới tên "Reroute".
             if not optimized_road.get("rerouted"):
@@ -435,7 +443,9 @@ if run_btn:
         "longitude": fcfs["hub"][1],
     }] + fcfs_orders.to_dict("records")
     legs = build_leg_distances(current_route, stops, active_distance_matrix)
-    disruption = hazards[0] if hazards else None
+
+    visible_hazards = display_hazards or hazards
+    disruption = visible_hazards[0] if visible_hazards else None
 
     result = {
         "fcfs_distance": fcfs_dist,
@@ -451,7 +461,7 @@ if run_btn:
         "urgent_order_id": urgent_order_id,
         "scenario": scenario,
         "scenario_disruption": disruption,
-        "hazards": hazards,
+        "hazards": visible_hazards,
         "legs": legs,
         "route_indices": current_route,
     }
@@ -482,11 +492,28 @@ if "optimization_result" in st.session_state:
         "Tổng khoảng cách di chuyển (km)": [result["fcfs_distance"], result["optimized_distance"]],
         "Lượng khí thải CO₂ xả thải (kg)": [result["fcfs_co2"], result["optimized_co2"]]
     })
+    
+
     col_c1, col_c2 = st.columns(2)
+    
     with col_c1:
-        st.bar_chart(chart_df, x="Phương án vận hành", y="Tổng khoảng cách di chuyển (km)", color="#1E3A8A", use_container_width=True)
+        # Biểu đồ 1: Tổng khoảng cách di chuyển
+        chart1 = alt.Chart(chart_df).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
+            x=alt.X("Phương án vận hành:N", axis=alt.Axis(labelAngle=0, title=None)), # Khóa góc chữ quay về 0 độ (Nằm ngang)
+            y=alt.Y("Tổng khoảng cách di chuyển (km):Q"),
+            color=alt.value("#1E3A8A")
+        ).properties(height=320)
+        st.altair_chart(chart1, use_container_width=True)
+
     with col_c2:
-        st.bar_chart(chart_df, x="Phương án vận hành", y="Lượng khí thải CO₂ xả thải (kg)", color="#DC2626", use_container_width=True)
+        # Biểu đồ 2: Lượng khí thải CO2 xả thải
+        chart2 = alt.Chart(chart_df).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
+            x=alt.X("Phương án vận hành:N", axis=alt.Axis(labelAngle=0, title=None)), # Khóa góc chữ quay về 0 độ (Nằm ngang)
+            y=alt.Y("Lượng khí thải CO₂ xả thải (kg):Q"),
+            color=alt.value("#DC2626")
+        ).properties(height=320)
+        st.altair_chart(chart2, use_container_width=True)
+
 
     st.divider()
 
