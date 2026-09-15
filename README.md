@@ -1,6 +1,6 @@
 # Last-Mile Route Optimization
 
-Live Demo: [gaoxanh-greenroute.streamlit.app](url)
+Live Demo: [https://gaoxanh-greenroute.streamlit.app](url)
 
 A Streamlit-based decision-support application for planning greener last-mile delivery routes. The system compares a **First-Come, First-Served (FCFS)** baseline with a **2-Opt heuristic**, uses OSRM road-network distances, estimates CO₂ emissions, and demonstrates route adaptation under traffic and weather disruptions.
 
