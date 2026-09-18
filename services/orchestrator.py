@@ -37,6 +37,7 @@ class LastMileRoutingService:
         self.route: list[int] | None = None
         self.fcfs_road: dict[str, Any] | None = None
         self.baseline_road: dict[str, Any] | None = None
+        self.baseline_route: list[int] | None = None
         self.optimized_road: dict[str, Any] | None = None
         self.active_distance_matrix = None
         self.active_duration_matrix = None
@@ -67,8 +68,9 @@ class LastMileRoutingService:
             suffix = two_opt(seed, self.active_distance_matrix, fix_start=True, fix_end=True)
             self.route = [0] + suffix
 
+        self.baseline_route = self.route[:]
         self.baseline_road = road_routing.get_route_legs(
-            [self.points[i] for i in self.route]
+            [self.points[i] for i in self.baseline_route]
         )
         return self.route[:]
 
@@ -192,7 +194,10 @@ class LastMileRoutingService:
         oco2 = calculate_co2(od, DEFAULT_MOTORCYCLE_EMISSION_FACTOR)
         return {
             "route_indices": self.route[:],
+            "baseline_route_indices": (self.baseline_route or self.route)[:],
             "fcfs_route_indices": self.fcfs_route[:],
+            "baseline_distance_km": round(float(self.baseline_road["distance_km"]), 4),
+            "baseline_duration_min": round(float(self.baseline_road["duration_min"]), 2),
             "distance_km": round(od, 4),
             "duration_min": round(ot, 2),
             "fcfs_distance_km": round(fd, 4),
