@@ -16,6 +16,7 @@ from services.emission import (
     calculate_reduction_percent,
 )
 from services.fcfs import build_fcfs_route
+from services.orchestrator import LastMileRoutingService
 from services.routing import road_routing
 from services.routing.bottleneck import Bottleneck, apply_penalties, reroute_remaining
 from services.routing.distance_matrix import build_distance_matrix
