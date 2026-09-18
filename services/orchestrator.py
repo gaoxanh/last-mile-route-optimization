@@ -14,7 +14,7 @@ from .routing import road_routing
 from .routing.bottleneck import Bottleneck, apply_penalties, reroute_remaining
 from .routing.distance_matrix import DistanceMatrixResult, Point, build_distance_matrix
 from .routing.leg_distance import build_leg_distances
-from .routing.two_opt import route_cost, two_opt
+from .routing.two_opt import route_cost, two_opt, two_opt_audit
 
 
 class LastMileRoutingService:
@@ -38,6 +38,8 @@ class LastMileRoutingService:
         self.fcfs_road: dict[str, Any] | None = None
         self.baseline_road: dict[str, Any] | None = None
         self.baseline_route: list[int] | None = None
+        self.optimization_seed: list[int] | None = None
+        self.two_opt_audit: dict[str, float | bool] = {}
         self.optimized_road: dict[str, Any] | None = None
         self.active_distance_matrix = None
         self.active_duration_matrix = None
@@ -60,6 +62,7 @@ class LastMileRoutingService:
         if urgent_index is None:
             seed = list(range(len(self.points))) + [0]
             self.route = two_opt(seed, self.active_distance_matrix)
+            self.optimization_seed = seed
         else:
             if not 1 <= urgent_index < len(self.points):
                 raise ValueError("urgent_index must reference a delivery stop")
@@ -67,8 +70,14 @@ class LastMileRoutingService:
             seed = [urgent_index] + remaining + [0]
             suffix = two_opt(seed, self.active_distance_matrix, fix_start=True, fix_end=True)
             self.route = [0] + suffix
+            self.optimization_seed = [0] + seed
 
         self.baseline_route = self.route[:]
+        self.two_opt_audit = two_opt_audit(
+            self.optimization_seed,
+            self.active_distance_matrix,
+            self.route,
+        )
         self.baseline_road = road_routing.get_route_legs(
             [self.points[i] for i in self.baseline_route]
         )
@@ -198,6 +207,9 @@ class LastMileRoutingService:
             "fcfs_route_indices": self.fcfs_route[:],
             "baseline_distance_km": round(float(self.baseline_road["distance_km"]), 4),
             "baseline_duration_min": round(float(self.baseline_road["duration_min"]), 2),
+            "fcfs_matrix_cost_km": round(route_cost(self.fcfs_route, self.matrices.road_distance_km), 6),
+            "two_opt_matrix_cost_km": round(route_cost(self.route, self.active_distance_matrix), 6),
+            "two_opt_audit": self.two_opt_audit,
             "distance_km": round(od, 4),
             "duration_min": round(ot, 2),
             "fcfs_distance_km": round(fd, 4),
