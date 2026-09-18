@@ -211,6 +211,7 @@ def build_single_map(hub, orders, road_geometry, color_path, color_marker, urgen
         tooltip={"html": "<b>Điểm dừng {sequence}</b><br/>Đơn hàng ID: {order_id}<br/>Trạng thái gấp: {urgent}"}
     )
 
+
 # --- PAGE HEADER / CONFIGURATION ---
 st.markdown(
     '<div class="page-heading"><h1>Route optimization</h1>'
@@ -224,256 +225,105 @@ if not batches:
     st.stop()
 
 with st.expander("⚙️ Optimization settings", expanded=True):
-    st.markdown('<div class="panel-sub">Select a delivery batch, priority order and road scenario</div>', unsafe_allow_html=True)
-    batch_options = {f"Batch {row['batch_id']} ({row['delivery_date']})": row for row in batches}
-    selected_label = st.selectbox("📦 Lựa chọn Delivery Batch", list(batch_options.keys()))
+    st.markdown(
+        '<div class="panel-sub">Select a delivery batch, priority order and road scenario</div>',
+        unsafe_allow_html=True,
+    )
+    batch_options = {
+        f"Batch {row['batch_id']} ({row['delivery_date']})": row
+        for row in batches
+    }
+    selected_label = st.selectbox(
+        "📦 Lựa chọn Delivery Batch", list(batch_options.keys())
+    )
     selected_batch = batch_options[selected_label]
-
-    st.info(f"**Phương tiện:** {selected_batch['vehicle_type']}\n\n**Trạng thái xử lý:** {selected_batch['status']}")
+    st.info(
+        f"**Phương tiện:** {selected_batch['vehicle_type']}\n\n"
+        f"**Trạng thái xử lý:** {selected_batch['status']}"
+    )
 
     if not CSV_PATH.exists():
         st.error(f"Không tìm thấy tập dữ liệu mẫu: {CSV_PATH}")
         st.stop()
 
+    # Hiện tại chỉ có một sample dataset; UI Batch giữ nguyên để mở rộng sau.
     preview_df = pd.read_csv(CSV_PATH)
     urgent_options = preview_df["order_id"].astype(str).tolist()
-    urgent_order_id = st.selectbox("🚨 Chỉ định Đơn hàng Ưu tiên (Urgent)", urgent_options, index=0)
-    scenario = st.selectbox("🌧️ Kịch bản điều kiện tuyến đường (Scenario)", ["Normal", "Traffic", "Weather", "Both"])
-
-    run_btn = st.button("🚀 Thực thi tối ưu hóa toàn tuyến", type="primary", use_container_width=True)
+    urgent_order_id = st.selectbox(
+        "🚨 Chỉ định Đơn hàng Ưu tiên (Urgent)",
+        urgent_options,
+        index=0,
+    )
+    scenario = st.selectbox(
+        "🌧️ Kịch bản điều kiện tuyến đường (Scenario)",
+        ["Normal", "Traffic", "Weather", "Both"],
+    )
+    run_btn = st.button(
+        "🚀 Thực thi tối ưu hóa toàn tuyến",
+        type="primary",
+        use_container_width=True,
+    )
 
 if run_btn:
-    df = preview_df.copy()
-    fcfs = build_fcfs_route(df)
-    fcfs_orders = fcfs["orders"].copy()
+    try:
+        df = preview_df.copy()
+        fcfs = build_fcfs_route(df)
+        fcfs_orders = fcfs["orders"].copy()
 
-    urgent_rows = fcfs_orders[fcfs_orders["order_id"].astype(str) == str(urgent_order_id)]
-    if urgent_rows.empty:
-        st.error(f"Không tìm thấy đơn hàng ưu tiên mang mã số {urgent_order_id}.")
-        st.stop()
+        urgent_rows = fcfs_orders[
+            fcfs_orders["order_id"].astype(str) == str(urgent_order_id)
+        ]
+        if urgent_rows.empty:
+            st.error(f"Không tìm thấy đơn hàng ưu tiên {urgent_order_id}.")
+            st.stop()
 
-    # Bước 1: tạo ma trận Haversine và ma trận đường bộ OSRM.
-    fcfs_points = [fcfs["hub"]] + [
-        (float(r["latitude"]), float(r["longitude"]))
-        for r in fcfs_orders.to_dict("records")
-    ]
-    matrices = build_distance_matrix(fcfs_points)
-    road_matrix = matrices.road_distance_km
-    duration_matrix = matrices.road_duration_min
+        stops = [{
+            "order_id": None,
+            "customer_id": None,
+            "latitude": fcfs["hub"][0],
+            "longitude": fcfs["hub"][1],
+        }] + fcfs_orders.to_dict("records")
 
-    # FCFS là tuyến mở: kho -> các điểm theo created_at.
-    fcfs_route = list(range(len(fcfs_points)))
-    fcfs_dist = round(route_cost(fcfs_route, road_matrix), 2)
+        urgent_position = urgent_rows.index[0]
+        urgent_index = fcfs_orders.index.get_loc(urgent_position) + 1
 
-    urgent_position = urgent_rows.index[0]
-    urgent_index = fcfs_orders.index.get_loc(urgent_position) + 1
-    remaining_indices = [i for i in range(1, len(fcfs_points)) if i != urgent_index]
-
-    # Bước 2: giữ đơn khẩn cấp ở đầu, dùng 2-opt cho phần còn lại và quay về kho.
-    optimized_suffix = two_opt(
-        [urgent_index] + remaining_indices + [0],
-        road_matrix,
-        fix_start=True,
-        fix_end=True,
-    )
-    baseline_route = [0] + optimized_suffix
-    baseline_distance = round(route_cost(baseline_route, road_matrix), 2)
-
-    def records_from_route(route_indices):
-        return [fcfs_orders.iloc[index - 1].to_dict() for index in route_indices[1:-1]]
-
-    baseline_route_orders = records_from_route(baseline_route)
-    current_route = baseline_route[:]
-    active_distance_matrix = [row[:] for row in road_matrix]
-    active_duration_matrix = [row[:] for row in duration_matrix]
-    hazards = []
-
-    # Giữ danh sách sự cố gốc riêng cho UI. Không để kết quả reroute
-    # loại mất sự cố đã được né khỏi bản đồ khi chọn scenario = All.
-    display_hazards = []
-
-    # Geometry tuyến trước sự cố được dùng để chọn và hiển thị điểm nghẽn.
-    fcfs_road = road_routing.get_route_legs(fcfs_points)
-    baseline_optimized_road = road_routing.get_route_legs([fcfs["hub"]] + [
-        (float(r["latitude"]), float(r["longitude"]))
-        for r in baseline_route_orders
-    ] + [fcfs["hub"]])
-
-    # Bước 3: phạt cạnh bị nghẽn rồi chạy lại 2-opt trên phần chưa giao.
-    # =========================================================================
-    # BƯỚC 3: CẤU HÌNH CỐ ĐỊNH ĐIỂM NGHẼN ĐỂ DEMO (TRAFFIC VS WEATHER VS ALL)
-    # =========================================================================
-    if scenario != "Normal" and len(baseline_route) > 3:
-        # Xác định 2 vị trí chặng cố định và hoàn toàn khác nhau trên lộ trình
-        # legs[0] là chặng Kho (route[0]) -> đơn ưu tiên 001 (route[1]).
-        # Giá trị 1 trước đây trỏ nhầm sang chặng 001 -> đơn kế tiếp.
-        pos_traffic = 0                                      # Kho -> đơn 001
-        pos_weather = max(2, (len(baseline_route) - 2) // 2) # Chặng giữa hành trình (ép tối thiểu chặng 2 để không trùng)
-
-        # Quyết định chặng nào sẽ bị chặn dựa theo kịch bản người dùng chọn
-        blocked_positions = []
-        if scenario == "Traffic":
-            blocked_positions = [pos_traffic]
-        elif scenario == "Weather":
-            blocked_positions = [pos_weather]
-        elif scenario == "Both":
-            blocked_positions = [pos_traffic, pos_weather]   # Bật cả 2 chặng cùng lúc
-
-        disruptions = []
-        for position in blocked_positions:
-            from_index = baseline_route[position]
-            to_index = baseline_route[position + 1]
-            leg = baseline_optimized_road["legs"][position]
-            point = road_routing.canonical_incident_point(leg["geometry"])
-            
-            # Tách biệt loại sự cố và gán bán kính (clearance) trực quan để làm nổi bật độ nghiêm trọng
-            if position == pos_traffic:
-                hazard_type = "traffic"
-                clearance_val = 150.0  # Kẹt xe: Vòng đỏ nhỏ (150m)
-            else:
-                hazard_type = "weather"
-                clearance_val = 400.0  # Mưa ngập: Vòng đỏ to (400m) để demo ấn tượng
-
-            hazards.append({
-                "type": hazard_type,
-                "leg_index": position,
-                "point": point,
-                "from_index": from_index,
-                "to_index": to_index,
-                "clearance_m": clearance_val, # Gán bán kính an toàn riêng biệt
-                "rerouted": True,
-            })
-
-            # Phạt ma trận khoảng cách và thời gian di chuyển
-            disruptions.append(Bottleneck(
-                from_index=from_index,
-                to_index=to_index,
-                distance_multiplier=1000.0,
-                duration_multiplier=1000.0,
-                bidirectional=False,
-                reason=scenario,
-            ))
-        # Tại đây hazards luôn chứa đầy đủ các sự cố của scenario đã chọn
-        # (Both = Traffic + Weather). Tạo bản sao trước khi lọc reroute_hazards.
-        display_hazards = [dict(hazard) for hazard in hazards]
-
-        # Áp dụng hình phạt vào ma trận nền để ép bộ não 2-opt bẻ làn
-        active_distance_matrix, active_duration_matrix = apply_penalties(
-            road_matrix, duration_matrix, disruptions
-        )
-        
-        # Chạy lại 2-opt định tuyến lại cho các điểm chưa giao
-        current_route = reroute_remaining(
-            baseline_route,
-            completed_leg_count=1,
-            penalized_distance_matrix=active_distance_matrix,
+        service = LastMileRoutingService(stops)
+        result = service.run(
+            urgent_index=urgent_index,
+            scenario=scenario,
         )
 
+        def records_from_route(route_indices):
+            return [
+                fcfs_orders.iloc[index - 1].to_dict()
+                for index in route_indices[1:-1]
+            ]
 
-    current_route_orders = records_from_route(current_route)
-    current_points = [fcfs_points[index] for index in current_route]
+        result["fcfs_route_orders"] = fcfs_orders.to_dict("records")
+        result["baseline_route_orders"] = records_from_route(result["route_indices"])
+        result["current_route_orders"] = records_from_route(result["route_indices"])
+        result["hub"] = fcfs["hub"]
+        result["urgent_order_id"] = urgent_order_id
+        result["scenario"] = scenario
+        result["scenario_disruption"] = (
+            result["display_hazards"][0]
+            if result["display_hazards"]
+            else None
+        )
+        result["hazards"] = result["display_hazards"] or result["hazards"]
+        result["fcfs_distance"] = result["fcfs_distance_km"]
+        result["baseline_distance"] = float(result["baseline_road"]["distance_km"])
+        result["optimized_distance"] = result["distance_km"]
+        result["fcfs_co2"] = result["fcfs_co2_kg"]
+        result["optimized_co2"] = result["co2_kg"]
+        result["reroute_below_fcfs"] = result["optimized_distance"] < result["fcfs_distance"]
 
-    # Dựng geometry theo thứ tự điểm sau khi chạy lại 2-opt
-    current_road = road_routing.get_route_legs(current_points)
+        st.session_state["optimization_result"] = result
+        st.success("Hệ thống tối ưu hóa hoàn tất dữ liệu hành trình!")
 
-    if scenario != "Normal" and hazards:
-        reroute_hazards = []
-
-        for hazard in hazards:
-            blocked_from = hazard["from_index"]
-            blocked_to = hazard["to_index"]
-
-            # Tìm xem cặp điểm bị nghẽn (from -> to) hiện tại đang nằm ở vị trí chặng nào 
-            # trong lộ trình mới sau khi đã chạy thuật toán 2-opt
-            new_leg_index = None
-            for index in range(len(current_route) - 1):
-                if current_route[index] == blocked_from and current_route[index + 1] == blocked_to:
-                    new_leg_index = index
-                    break
-
-            # TRƯỜNG HỢP 1: Nếu tuyến sau 2-opt VẪN PHẢI đi qua cặp điểm nghẽn này 
-            # (Ví dụ: Chặng từ Kho đến đơn Urgent 001 bắt buộc phải đi vì 001 khóa đầu)
-            if new_leg_index is not None:
-                reroute_hazards.append({
-                    **hazard,
-                    "leg_index": new_leg_index, # Gán chính xác vị trí chặng mới để OSRM bẻ làn
-                    "clearance_m": hazard.get("clearance_m", 120.0)
-                })
-
-        # Nếu cặp điểm nghẽn vẫn tồn tại trong lộ trình mới, gọi OSRM bẻ cong đoạn đó
-        if reroute_hazards:
-            optimized_road = road_routing.reroute_route_with_hazards(
-                current_road,
-                reroute_hazards,
-            )
-            final_clearance = road_routing._minimum_clearance_m(
-                optimized_road["geometry"],
-                hazards[0]["point"],
-            )
-
-            #st.write("Final route clearance:", final_clearance)
-
-            # Không cho UI hiển thị tuyến cũ dưới tên "Reroute".
-            if not optimized_road.get("rerouted"):
-                failed = [
-                    h.get("error", "Không tìm được đường vòng hợp lệ")
-                    for h in optimized_road.get("hazards", [])
-                    if not h.get("rerouted")
-                ]
-                st.error(
-                    "OSRM không tìm được tuyến né điểm nghẽn: "
-                    + "; ".join(failed)
-                )
-                st.stop()
-
-            # Dùng trạng thái hazard thật do road_routing trả về.
-            hazards = optimized_road.get("hazards", reroute_hazards)
-        else:
-            optimized_road = current_road
-    else:
-        optimized_road = current_road
-
-    optimized_dist = round(optimized_road["distance_km"], 2)
-
-    # Bước 4: đóng gói khoảng cách từng chặng, chính xác 0.0001 km (10 cm).
-    stops = [{
-        "order_id": None,
-        "customer_id": None,
-        "latitude": fcfs["hub"][0],
-        "longitude": fcfs["hub"][1],
-    }] + fcfs_orders.to_dict("records")
-    legs = build_leg_distances(current_route, stops, active_distance_matrix)
-
-    visible_hazards = display_hazards or hazards
-    disruption = visible_hazards[0] if visible_hazards else None
-
-    result = {
-        "fcfs_distance": fcfs_dist,
-        "baseline_distance": baseline_distance,
-        "optimized_distance": optimized_dist,
-        "fcfs_route_orders": fcfs_orders.to_dict("records"),
-        "baseline_route_orders": baseline_route_orders,
-        "current_route_orders": current_route_orders,
-        "hub": fcfs["hub"],
-        "fcfs_road": fcfs_road,
-        "baseline_optimized_road": baseline_optimized_road,
-        "optimized_road": optimized_road,
-        "urgent_order_id": urgent_order_id,
-        "scenario": scenario,
-        "scenario_disruption": disruption,
-        "hazards": visible_hazards,
-        "legs": legs,
-        "route_indices": current_route,
-    }
-
-    result["fcfs_co2"] = calculate_co2(fcfs_dist, DEFAULT_MOTORCYCLE_EMISSION_FACTOR)
-    result["optimized_co2"] = calculate_co2(optimized_dist, DEFAULT_MOTORCYCLE_EMISSION_FACTOR)
-    result["distance_reduction"] = calculate_reduction_percent(fcfs_dist, optimized_dist)
-    result["co2_reduction"] = calculate_reduction_percent(result["fcfs_co2"], result["optimized_co2"])
-    result["reroute_below_fcfs"] = optimized_dist < fcfs_dist
-
-    st.session_state["optimization_result"] = result
-    st.success("Hệ thống tối ưu hóa hoàn tất dữ liệu hành trình!")
+    except Exception as exc:
+        st.error(f"Không thể thực thi tối ưu hóa: {exc}")
+        st.exception(exc)
 
 # --- DISPLAY ---
 if "optimization_result" in st.session_state:
