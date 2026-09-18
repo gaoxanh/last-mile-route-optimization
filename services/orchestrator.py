@@ -58,13 +58,13 @@ class LastMileRoutingService:
         self._require_initialized()
         if urgent_index is None:
             seed = list(range(len(self.points))) + [0]
-            self.route = two_opt(seed, self.active_distance_matrix, True, True)
+            self.route = two_opt(seed, self.active_distance_matrix, fix_start=True, fix_end=True)
         else:
             if not 1 <= urgent_index < len(self.points):
                 raise ValueError("urgent_index must reference a delivery stop")
             remaining = [i for i in range(1, len(self.points)) if i != urgent_index]
             seed = [urgent_index] + remaining + [0]
-            suffix = two_opt(seed, self.active_distance_matrix, True, True)
+            suffix = two_opt(seed, self.active_distance_matrix, fix_start=True, fix_end=True)
             self.route = [0] + suffix
 
         self.baseline_road = road_routing.get_route_legs(
