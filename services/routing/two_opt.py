@@ -10,6 +10,18 @@ def route_cost(route: Sequence[int], matrix: Matrix) -> float:
     return sum(matrix[a][b] for a, b in zip(route, route[1:]))
 
 
+def two_opt_audit(route: Sequence[int], matrix: Matrix, optimized_route: Sequence[int]) -> dict[str, float | bool]:
+    """Return comparable matrix-cost diagnostics for an already optimised route."""
+    initial_cost = route_cost(route, matrix)
+    final_cost = route_cost(optimized_route, matrix)
+    return {
+        "initial_cost_km": round(float(initial_cost), 6),
+        "final_cost_km": round(float(final_cost), 6),
+        "improvement_km": round(float(initial_cost - final_cost), 6),
+        "changed": list(route) != list(optimized_route),
+    }
+
+
 def two_opt(
     route: Sequence[int],
     matrix: Matrix,
