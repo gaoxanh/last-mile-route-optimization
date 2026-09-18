@@ -301,11 +301,14 @@ if run_btn:
             ]
 
         result["fcfs_route_orders"] = fcfs_orders.to_dict("records")
-        result["baseline_route_orders"] = records_from_route(result["route_indices"])
+        result["baseline_route_orders"] = records_from_route(
+            result.get("baseline_route_indices", result["route_indices"])
+        )
         result["current_route_orders"] = records_from_route(result["route_indices"])
         result["hub"] = fcfs["hub"]
         result["urgent_order_id"] = urgent_order_id
         result["scenario"] = scenario
+        result["baseline_optimized_road"] = result.get("baseline_road")
         result["scenario_disruption"] = (
             result["display_hazards"][0]
             if result["display_hazards"]
@@ -313,7 +316,7 @@ if run_btn:
         )
         result["hazards"] = result["display_hazards"] or result["hazards"]
         result["fcfs_distance"] = result["fcfs_distance_km"]
-        result["baseline_distance"] = float(result["baseline_road"]["distance_km"])
+        result["baseline_distance"] = float(result.get("baseline_distance_km", result["baseline_road"]["distance_km"]))
         result["optimized_distance"] = result["distance_km"]
         result["fcfs_co2"] = result["fcfs_co2_kg"]
         result["optimized_co2"] = result["co2_kg"]
