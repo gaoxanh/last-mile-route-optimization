@@ -79,55 +79,8 @@ div[data-testid="stPageLink"] a[aria-current="page"] * {color:var(--eco)!importa
 h1 {font-size:30px!important; line-height:1.15!important; letter-spacing:-.7px!important; margin:0!important;}
 h2 {font-size:20px!important; letter-spacing:-.25px!important;}
 h3 {font-size:16px!important;}
-.page-heading {margin:3px 0 18px;}
-.page-heading h1 {font-size:30px; margin:0; color:var(--forest); letter-spacing:-.7px;}
-.page-heading p {margin:5px 0 0; color:var(--muted); font-size:13px;}
-.section-label {margin:20px 0 10px; font-size:16px; font-weight:800; color:var(--forest);}
 
-.metric-grid {
-    display: grid; 
-    grid-template-columns: repeat(4, minmax(0,1fr)); 
-    gap: 16px; 
-    margin: 12px 0 20px;
-}
 
-.metric-card {
-    min-height: 104px; 
-    display: flex; 
-    align-items: center; 
-    gap: 16px; 
-    padding: 18px 20px;
-    background: #ffffff !important; 
-    border: 1px solid #D2E2CE !important; 
-    border-radius: 16px !important; 
-    /* Đổ bóng rêu mịn màng diện rộng tạo độ nổi bật */
-    box-shadow: 0 10px 25px rgba(57, 76, 56, 0.05) !important;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-/* Hiệu ứng nhấc nhẹ thẻ lên cao và đổi màu viền khi tương tác */
-.metric-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--eco) !important;
-    box-shadow: 0 14px 32px rgba(57, 76, 56, 0.1) !important;
-}
-
-.metric-icon {flex:0 0 43px; width:43px; height:43px; display:grid; place-items:center;
-  border-radius:11px; color:var(--eco); background:var(--mint); font-size:21px;}
-.metric-label {font-size:12px; font-weight:700; color:var(--muted); margin-bottom:5px;}
-.metric-value {font-size:25px; line-height:1; font-weight:800; letter-spacing:-.5px; color:var(--forest);}
-.metric-delta {display:inline-block; margin-left:7px; padding:4px 7px; border-radius:7px;
-  color:#28733A; background:#E2F3E3; font-size:10px; font-weight:800; vertical-align:3px;}
-
-.panel-title {font-size:15px; font-weight:800; color:var(--forest); margin:1px 0 2px;}
-.panel-sub {font-size:11px; color:var(--muted); margin-bottom:8px;}
-.callout {padding:15px 17px; margin:8px 0 15px; border:1px solid #CADAC5; border-radius:12px;
-  background:linear-gradient(110deg,#EDF5EA,#F8FBF7); color:var(--forest);}
-.callout strong {font-size:14px;} .callout span {display:block; margin-top:4px; color:var(--muted); font-size:11px;}
-.route-card {padding:15px; border:1px solid var(--line); border-radius:13px; background:white; margin-bottom:10px;}
-.route-card-top {display:flex; justify-content:space-between; gap:10px; font-size:12px; font-weight:800;}
-.route-meta {margin-top:7px; font-size:11px; color:var(--muted);}
-.badge {display:inline-block; padding:4px 8px; border-radius:999px; background:var(--mint); color:var(--eco); font-size:10px; font-weight:800;}
 
 [data-testid="stVerticalBlockBorderWrapper"] {background:white; border-color:var(--line)!important;
   border-radius:14px!important; box-shadow:0 4px 13px rgba(47,68,46,.045);}
@@ -149,7 +102,6 @@ hr {border-color:var(--line)!important;}
   .brand-title {font-size:17px;} .brand-sub,.status-pill {display:none;}
   [data-testid="stNavigation"] {margin:0 -1rem 18px; padding:0 .5rem; overflow-x:auto;}
   [data-testid="stNavigation"] a {min-width:135px; padding:12px 10px!important;}
-  .metric-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 @media (max-width:560px) {.login-pill {display:none;}}
 </style>
@@ -173,39 +125,6 @@ def render_header() -> None:
         """,
         unsafe_allow_html=True,
     )
-
-
-def page_heading(title: str, subtitle: str) -> None:
-    st.markdown(
-        f'<div class="page-heading"><h1>{title}</h1><p>{subtitle}</p></div>',
-        unsafe_allow_html=True,
-    )
-
-
-def metric_cards(items: list[tuple[str, str, str, str]]) -> None:
-    cards = "".join(
-        f"""<div class="metric-card"><div class="metric-icon">{icon}</div><div>
-        <div class="metric-label">{label}</div><div class="metric-value">{value}
-        {f'<span class="metric-delta">{delta}</span>' if delta else ''}</div></div></div>"""
-        for icon, label, value, delta in items
-    )
-    st.markdown(f'<div class="metric-grid">{cards}</div>', unsafe_allow_html=True)
-
-
-def style_figure(fig, height: int = 310):
-    fig.update_layout(
-        height=height,
-        margin=dict(l=10, r=10, t=22, b=8),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, sans-serif", color="#596656", size=11),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        hoverlabel=dict(bgcolor="white"),
-    )
-    fig.update_xaxes(gridcolor="#E7EDE5", zeroline=False)
-    fig.update_yaxes(gridcolor="#E7EDE5", zeroline=False)
-    return fig
-
 
 # Register real module pages first, then render a stable custom top navigation.
 pages = [
