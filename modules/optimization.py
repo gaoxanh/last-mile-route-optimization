@@ -9,7 +9,7 @@ try:
 except ImportError:  # pragma: no cover - optional dependency for map rendering
     pdk = None
 
-from database.connection import get_connection
+from database.connection import get_connection, ensure_database_schema
 from services.fcfs import build_fcfs_route
 from services.orchestrator import LastMileRoutingService
 
@@ -37,14 +37,7 @@ def get_batches():
 def save_demo_routes_to_db(result, fcfs_orders, batch_id, vehicle_id):
     """Persist the current CSV demo result so Dashboard/Route History share the same run."""
     with get_connection() as conn:
-        # Migrate older local/Cloud DB files without changing the CSV demo source.
-        columns = {row["name"] for row in conn.execute("PRAGMA table_info(routes)").fetchall()}
-        if "urgent_order_id" not in columns:
-            conn.execute("ALTER TABLE routes ADD COLUMN urgent_order_id TEXT")
-        if "scenario" not in columns:
-            conn.execute("ALTER TABLE routes ADD COLUMN scenario TEXT DEFAULT 'Normal'")
-        if "duration_min" not in columns:
-            conn.execute("ALTER TABLE routes ADD COLUMN duration_min REAL DEFAULT 0.0")
+        ensure_database_schema(conn)
         db_orders = conn.execute(
             """
             SELECT o.order_id, c.latitude, c.longitude
