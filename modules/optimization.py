@@ -206,7 +206,7 @@ def build_single_map(hub, orders, road_geometry, color_path, color_marker, urgen
 # --- PAGE HEADER / CONFIGURATION ---
 st.markdown(
     '<div class="page-heading"><h1>Route optimization</h1>'
-    '<p>Configure constraints, generate routes and compare efficiency</p></div>',
+    '<p>Run the 30-order demo, compare FCFS with 2-Opt and simulate road disruptions</p></div>',
     unsafe_allow_html=True,
 )
 
@@ -217,7 +217,7 @@ if not batches:
 
 with st.expander("⚙️ Optimization settings", expanded=True):
     st.markdown(
-        '<div class="panel-sub">Select a delivery batch, priority order and road scenario</div>',
+        '<div class="panel-sub">Demo input: data/sample_orders.csv · batch selector is kept for the future multi-batch version</div>',
         unsafe_allow_html=True,
     )
     batch_options = {
@@ -229,8 +229,7 @@ with st.expander("⚙️ Optimization settings", expanded=True):
     )
     selected_batch = batch_options[selected_label]
     st.info(
-        f"**Phương tiện:** {selected_batch['vehicle_type']}\n\n"
-        f"**Trạng thái xử lý:** {selected_batch['status']}"
+        f"**Vehicle:** {selected_batch['vehicle_type']}  ·  **Batch status:** {selected_batch['status']}  ·  **Orders:** demo CSV (30 orders)"
     )
 
     if not CSV_PATH.exists():
@@ -324,7 +323,7 @@ if "optimization_result" in st.session_state:
     result = st.session_state["optimization_result"]
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Khoảng cách gốc (FCFS)", f"{result['fcfs_distance']:.2f} km")
-    m2.metric("Khoảng cách tối ưu / Reroute", f"{result['optimized_distance']:.2f} km", delta=f"-{result['distance_reduction']:.1f}%")
+    m2.metric("Khoảng cách sau tối ưu", f"{result['optimized_distance']:.2f} km", delta=f"-{result['distance_reduction']:.1f}%")
     m3.metric("Khí thải CO₂ gốc (FCFS)", f"{result['fcfs_co2']:.2f} kg")
     m4.metric("Khí thải CO₂ sau tối ưu", f"{result['optimized_co2']:.2f} kg", delta=f"-{result['co2_reduction']:.1f}%")
 
@@ -343,7 +342,7 @@ if "optimization_result" in st.session_state:
 
     st.divider()
 
-    st.subheader("📊 Phân Tích Chỉ Số Thay Đổi Biến Động")
+    st.subheader("📊 So sánh hiệu quả tuyến")
     chart_df = pd.DataFrame({
         "Phương án vận hành": ["FCFS Baseline", "Thuật toán Tối ưu"],
         "Tổng khoảng cách di chuyển (km)": [result["fcfs_distance"], result["optimized_distance"]],
@@ -375,10 +374,10 @@ if "optimization_result" in st.session_state:
     st.divider()
 
     if result.get("scenario") != "Normal":
-        st.subheader("🗺️ Bản đồ so sánh phân nhánh độc lập: Tuyến ban đầu vs Tuyến né tránh điểm nghẽn")
+        st.subheader("🗺️ So sánh tuyến trước và sau xử lý sự cố")
         map_col_left, map_col_right = st.columns(2)
         with map_col_left:
-            st.markdown("### 🟣 1. Tuyến đường ban đầu (Phát hiện điểm chặn 🚧)")
+            st.markdown("### 🟣 1. Tuyến tối ưu trước sự cố")
             st.caption(f"Khoảng cách dự kiến ban đầu: {result['baseline_distance']:.2f} km")
             map_before = build_single_map(
                 hub=result["hub"],
@@ -392,7 +391,7 @@ if "optimization_result" in st.session_state:
             )
             st.pydeck_chart(map_before, use_container_width=True, height=520, key="map_before_disruption_fixed")
         with map_col_right:
-            st.markdown(f"### 🔴 2. Tuyến Reroute thực tế (Né hoàn toàn sự cố: {result['scenario']})")
+            st.markdown(f"### 🔴 2. Tuyến sau xử lý — {result['scenario']}")
             st.caption(f"Tổng khoảng cách thực tế sau đi vòng: {result['optimized_distance']:.2f} km")
             map_after = build_single_map(
                 hub=result["hub"],
@@ -407,10 +406,10 @@ if "optimization_result" in st.session_state:
             )
             st.pydeck_chart(map_after, use_container_width=True, height=520, key="map_after_reroute_fixed")
     else:
-        st.subheader("🗺️ Bản đồ so sánh phân nhánh độc lập: FCFS Baseline vs Tuyến tối ưu hóa 2-Opt")
+        st.subheader("🗺️ FCFS Baseline vs 2-Opt")
         map_col_left, map_col_right = st.columns(2)
         with map_col_left:
-            st.markdown("### 🔵 1. Tuyến đường phân phối FCFS Baseline")
+            st.markdown("### 🔵 1. FCFS Baseline")
             st.caption(f"Tổng cự ly tuyến đường FCFS: {result['fcfs_distance']:.2f} km")
             map_fcfs = build_single_map(
                 hub=result["hub"],
@@ -422,7 +421,7 @@ if "optimization_result" in st.session_state:
             )
             st.pydeck_chart(map_fcfs, use_container_width=True, height=520, key="map_fcfs_normal_fixed")
         with map_col_right:
-            st.markdown("### 🔴 2. Tuyến đường tối ưu hóa bằng thuật toán 2-Opt")
+            st.markdown("### 🔴 2. Tuyến tối ưu 2-Opt")
             st.caption(f"Tổng cự ly tuyến đường tối ưu: {result['optimized_distance']:.2f} km")
             map_opt = build_single_map(
                 hub=result["hub"],
