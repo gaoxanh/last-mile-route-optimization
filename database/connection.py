@@ -47,6 +47,18 @@ def ensure_database_ready():
                 result = conn.execute(
                     "SELECT COUNT(*) FROM orders"
                 ).fetchone()
+
+                # Lightweight migration for existing demo DB files.
+                route_columns = {
+                    row["name"]
+                    for row in conn.execute("PRAGMA table_info(routes)").fetchall()
+                }
+                if "urgent_order_id" not in route_columns:
+                    conn.execute("ALTER TABLE routes ADD COLUMN urgent_order_id TEXT")
+                if "scenario" not in route_columns:
+                    conn.execute("ALTER TABLE routes ADD COLUMN scenario TEXT DEFAULT 'Normal'")
+                conn.commit()
+
                 print(f"✅ Hệ thống sẵn sàng. Tổng số đơn hàng hiện tại: {result[0]}")
         except sqlite3.OperationalError:
             print("⚠️ CẢNH BÁO: File DB tồn tại nhưng cấu trúc bảng chưa khớp. Vui lòng chạy init_db dưới Local trước.")
