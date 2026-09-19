@@ -110,12 +110,13 @@ if selected_batch != "All" and "batch_id" in filtered.columns:
 # KPI
 # -------------------------
 
-k1, k2, k3 = st.columns(3)
+k1, k2, k3, k4 = st.columns(4)
 
 k1.metric(
-    "Total Orders",
+    "Orders",
     f"{len(filtered):,}",
 )
+
 
 if "status" in filtered.columns:
     delivered = int(
@@ -127,6 +128,7 @@ else:
 k2.metric(
     "Delivered",
     f"{delivered:,}",
+    delta=f"{delivered / len(filtered) * 100:.0f}% of view" if len(filtered) else None,
 )
 
 if "status" in filtered.columns:
@@ -140,6 +142,14 @@ k3.metric(
     "Pending",
     f"{pending:,}",
 )
+if "weight_kg" in filtered.columns:
+    total_weight = pd.to_numeric(filtered["weight_kg"], errors="coerce").sum()
+else:
+    total_weight = 0
+k4.metric(
+    "Shipment weight",
+    f"{total_weight:.1f} kg",
+)
 
 
 # -------------------------
@@ -147,6 +157,12 @@ k3.metric(
 # -------------------------
 
 st.divider()
+
+st.markdown(
+    f'<div class="panel-title">📦 &nbsp;Delivery orders</div>'
+    f'<div class="panel-sub">{len(filtered):,} orders match the current filters</div>',
+    unsafe_allow_html=True,
+)
 
 display_df = filtered.copy()
 
@@ -176,10 +192,23 @@ display_df = display_df[
     available_preferred + remaining
 ]
 
+column_config = {
+    "order_id": st.column_config.TextColumn("Order", width="small"),
+    "customer_id": st.column_config.TextColumn("Customer", width="small"),
+    "batch_id": st.column_config.NumberColumn("Batch", format="%d"),
+    "status": st.column_config.TextColumn("Status", width="small"),
+    "created_at": st.column_config.DatetimeColumn("Created", format="DD/MM HH:mm"),
+    "latitude": st.column_config.NumberColumn("Latitude", format="%.5f"),
+    "longitude": st.column_config.NumberColumn("Longitude", format="%.5f"),
+    "weight_kg": st.column_config.NumberColumn("Weight (kg)", format="%.1f"),
+}
+
 st.dataframe(
     display_df,
+    column_config=column_config,
     use_container_width=True,
     hide_index=True,
+    height=430,
 )
 
 
@@ -189,7 +218,9 @@ st.dataframe(
 
 if {"latitude", "longitude"}.issubset(filtered.columns):
     st.divider()
-    st.markdown('<div class="section-label">Order locations</div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel-title">📍 &nbsp;Delivery coverage</div>'
+                '<div class="panel-sub">Customer locations in the current filtered order set</div>',
+                unsafe_allow_html=True)
 
     map_df = filtered[
         ["latitude", "longitude"]
