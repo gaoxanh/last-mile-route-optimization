@@ -1,228 +1,453 @@
-# Last-Mile Route Optimization
+# GreenRoute — Last-Mile Route Optimization
 
-Live Demo: [https://gaoxanh-greenroute.streamlit.app](url)
+Live Demo: [GreenRoute on Streamlit](https://gaoxanh-greenroute.streamlit.app)
 
-A Streamlit-based decision-support application for planning greener last-mile delivery routes. The system compares a **First-Come, First-Served (FCFS)** baseline with a **2-Opt heuristic**, uses OSRM road-network distances, estimates CO₂ emissions, and demonstrates route adaptation under traffic and weather disruptions.
+A Streamlit-based academic prototype for **last-mile delivery route optimization and CO₂ estimation**. The system compares a chronological **First-Come, First-Served (FCFS)** baseline with an **urgent-first 2-Opt** route, uses OSRM road-network data for distance and travel time, simulates traffic and weather disruptions, and stores route results in SQLite.
 
-> Academic prototype: the current implementation focuses on a single delivery batch and one route at a time. It is not yet a production-grade multi-vehicle VRP solver.
+> **Academic prototype:** the current scope is one delivery batch / one vehicle route with a 30-order demonstration dataset. It is not a full multi-vehicle capacitated VRP solver, and disruption data is simulated rather than live.
 
-## Highlights
+---
 
-- Compare FCFS and optimized delivery sequences.
-- Build road-distance and travel-time matrices with the OSRM Table API.
-- Keep a selected urgent order at the beginning of the optimized sequence.
-- Re-optimize the untravelled part of a route when a bottleneck appears.
-- Demonstrate traffic, weather, and combined disruption scenarios.
-- Visualize routes, stops, hazards, distances, and CO₂ emissions.
-- Manage orders and inspect saved route history in SQLite.
-- Validate routing, distance, emission, and persistence logic with automated tests.
+## 1. Project Overview
 
-## System Workflow
+GreenRoute focuses on two related routing problems:
 
-```mermaid
+1. **Initial route planning** — compare FCFS with an urgent-first 2-Opt heuristic.
+2. **Mid-route adaptation** — when a simulated disruption affects the planned road, preserve the completed route prefix and re-optimize the uncompleted suffix, followed by road-level detour validation.
+
+The application separates **stop-order optimization** from **road-level routing**:
+
+- **OSRM Table API** provides pairwise road distance and duration used by the optimization heuristic.
+- **OSRM Route API** provides actual road geometry and per-leg route metrics shown on the maps.
+- **Bottleneck penalties** discourage affected route edges.
+- **Waypoint detour logic** checks whether the resulting road geometry still enters the simulated hazard area.
+
+---
+
+## 2. Completed Features
+
+### Routing and optimization
+
+- FCFS baseline sorted by created_at.
+- Closed routes: hub → all delivery stops → hub.
+- Selected urgent order is fixed as the first delivery stop in the optimized route.
+- 2-Opt local search over OSRM road-distance matrices.
+- 2-Opt audit showing initial cost, final cost, improvement, and whether the route changed.
+- Final route metrics are recalculated from OSRM road geometry.
+- FCFS and optimized routes are evaluated using the same road-network basis.
+
+### Disruption simulation
+
+Four scenarios are supported:
+
+| Scenario | Implemented behaviour |
+| --- | --- |
+| **Normal** | Urgent-first 2-Opt without an active disruption. |
+| **Traffic** | Simulated traffic bottleneck placed on an early route leg. |
+| **Weather** | Simulated weather hazard placed on a later route leg. |
+| **Both** | Simulates both traffic and weather hazards. |
+
+For a disruption scenario:
+
+1. The incident is anchored to an actual point on the planned OSRM road geometry.
+2. The affected edge receives a large penalty.
+3. The completed prefix of the route is preserved.
+4. The remaining suffix is re-optimized.
+5. The resulting OSRM geometry is checked against the hazard clearance area.
+6. A road-level detour is attempted when the route still enters the hazard zone.
+
+### Environmental metrics
+
+CO₂ is estimated using a constant distance-based emission factor:
+
+~~~text
+CO₂ (kg) = route distance (km) × emission factor (kg CO₂/km)
+~~~
+
+Current default motorcycle emission factor:
+
+~~~text
+0.06 kg CO₂/km
+~~~
+
+The factor is configured in services/config.py.
+
+### Database and application
+
+- SQLite persistence for hubs, customers, vehicles, delivery batches, orders, routes, and route stops.
+- FCFS and optimized route results can be persisted from the Optimization page.
+- Dashboard reads recorded route results from SQLite.
+- Route History reads stored route and stop information.
+- Orders page provides order filtering and inspection.
+- Shared Streamlit shell with green/eco visual design and custom top navigation.
+
+---
+
+## 3. System Workflow
+
+~~~mermaid
 flowchart TD
-    A["Orders and hub"] --> B["FCFS baseline"]
-    A --> C["Haversine screening"]
-    C --> D["OSRM distance and time matrices"]
-    D --> E["Urgent-first 2-Opt"]
-    E --> F{"Road disruption?"}
-    F -- No --> H["Final route and metrics"]
-    F -- Yes --> G["Penalize affected edges and reroute"]
+    A["30-order demo dataset"] --> B["FCFS chronological baseline"]
+    A --> C["OSRM road-distance / duration matrices"]
+    C --> D["Urgent-first seed"]
+    D --> E["2-Opt local search"]
+    B --> F["FCFS road route"]
+    E --> G["Optimized road route"]
+    F --> H{"Scenario"}
     G --> H
-    B --> I["Baseline comparison"]
-    H --> I
-    I --> J["Streamlit dashboard and SQLite history"]
-```
+    H -- "Normal" --> I["Final route metrics"]
+    H -- "Traffic / Weather / Both" --> J["Place simulated hazard on route"]
+    J --> K["Penalize affected edge"]
+    K --> L["Re-optimize uncompleted suffix"]
+    L --> M["Check road geometry / hazard clearance"]
+    M --> N["Detour if required"]
+    N --> I
+    I --> O["CO₂ calculation"]
+    I --> P["SQLite persistence"]
+    O --> Q["Streamlit Dashboard / Route History"]
+    P --> Q
+~~~
 
-## Optimization Approach
+---
 
-The application uses a transparent heuristic pipeline rather than an exact solver:
+## 4. Optimization Logic
 
-1. **FCFS baseline** — orders are sorted by `created_at` to form the reference route.
-2. **Distance construction** — Haversine distance provides geographic screening, while OSRM supplies road distance and duration matrices.
-3. **Urgent-order constraint** — the selected urgent order is fixed as the first delivery stop.
-4. **2-Opt improvement** — contiguous route segments are reversed iteratively whenever the total road distance decreases.
-5. **Disruption handling** — affected edges receive large penalties; the uncompleted suffix is optimized again, and OSRM waypoint detours are evaluated for hazard clearance.
-6. **Environmental evaluation** — emissions are estimated as:
+### 4.1 FCFS baseline
 
-   ```text
-   CO₂ (kg) = route distance (km) × emission factor (kg CO₂/km)
-   ```
+Orders are sorted chronologically using created_at.
 
-   The default motorcycle emission factor is `0.06 kg CO₂/km` and can be changed in `services/config.py`.
+The baseline route is:
 
-### Scenarios
+~~~text
+Hub → Order 1 → Order 2 → ... → Order N → Hub
+~~~
 
-| Scenario | Behaviour |
+The baseline is evaluated using OSRM road routing so that FCFS and optimized routes use the same road-network basis.
+
+### 4.2 Urgent-first 2-Opt
+
+When an urgent order is selected, the optimization seed places that order immediately after the hub:
+
+~~~text
+Hub → Urgent Order → Remaining Orders → Hub
+~~~
+
+2-Opt then reverses route segments whenever the resulting matrix cost is strictly lower.
+
+The hub remains fixed at the beginning and end of the final route.
+
+### 4.3 Two-level routing architecture
+
+**Level 1 — stop-order optimization**
+
+~~~text
+OSRM Table Matrix
+      ↓
+Urgent-first seed
+      ↓
+2-Opt
+      ↓
+Optimized stop sequence
+~~~
+
+**Level 2 — road-level adaptation**
+
+~~~text
+Optimized stop sequence
+      ↓
+OSRM Route geometry
+      ↓
+Simulated road hazard
+      ↓
+Penalty + suffix rerouting
+      ↓
+Hazard clearance check
+      ↓
+OSRM detour
+~~~
+
+This separation allows the prototype to demonstrate both route-sequence optimization and physical road detouring.
+
+---
+
+## 5. Application Pages
+
+| Page | Current role |
 | --- | --- |
-| `Normal` | Runs urgent-first 2-Opt without an active disruption. |
-| `Traffic` | Applies a simulated traffic bottleneck to an early route leg. |
-| `Weather` | Applies a simulated weather hazard to a later route leg. |
-| `Both` | Activates both disruption types and recalculates the remaining route. |
+| **Dashboard** | Reads the latest persisted FCFS/optimized route pair from SQLite and summarizes distance, CO₂, route records, and recent runs. |
+| **Optimization** | Selects a delivery batch, urgent order, and scenario; runs the routing workflow; displays KPI comparison, 2-Opt audit, and route maps. |
+| **Orders** | Inspects and filters delivery orders stored in the application database. |
+| **Route History** | Reviews saved routes, stops, route metrics, and historical optimization results. |
 
-## Application Pages
+The application entrypoint, app.py, is intentionally limited to the shared application shell: page configuration, global CSS, header, and navigation. Page-specific logic lives under modules/.
 
-| Page | Purpose |
+---
+
+## 6. Maps and Visualization
+
+The Optimization page uses **PyDeck** for route visualization.
+
+Current maps show:
+
+- OSRM road geometry.
+- Numbered delivery stops.
+- Hub marker.
+- Urgent-order marker.
+- Traffic/weather hazard marker.
+- Hazard clearance area.
+- Original route geometry when comparing a rerouted route.
+- Separate visual treatment for FCFS, pre-disruption, and post-reroute routes.
+
+Route geometry comes from OSRM rather than simple straight lines between customer coordinates.
+
+---
+
+## 7. Technology Stack
+
+| Technology | Purpose |
 | --- | --- |
-| Dashboard | Summarizes delivery distance, emissions, and recent route performance. |
-| Optimization | Selects a batch, urgent order, and scenario; runs the routing workflow and displays route comparisons. |
-| Orders | Filters orders by identifier, customer, status, and delivery batch; previews locations. |
-| Route History | Reviews stored FCFS/optimized routes, KPIs, stops, and locations. |
+| Python | Application and routing logic |
+| Streamlit | Interactive web application |
+| pandas | Data processing |
+| PyDeck | Interactive route maps |
+| Plotly | Data visualization |
+| SQLite | Application persistence |
+| OSRM | Road distance, duration, and geometry |
+| OpenStreetMap | Underlying road-network data |
 
-## Technology Stack
+---
 
-- Python 3.12+
-- Streamlit
-- pandas
-- PyDeck and Altair/Plotly visualizations
-- SQLite
-- OSRM APIs backed by OpenStreetMap road data
-- pytest test suite
+## 8. Project Structure
 
-## Project Structure
-
-```text
+~~~text
 last-mile-route-optimization/
-├── app.py                         # Streamlit entry point and shared UI
-├── modules/                       # Dashboard, optimization, orders, history
+│
+├── app.py                              # Streamlit entrypoint + shared UI shell
+│
+├── modules/
+│   ├── dashboard.py                    # Database-driven dashboard
+│   ├── optimization.py                 # Optimization workflow + maps
+│   ├── orders.py                       # Order management / inspection
+│   └── route_history.py                # Saved route history
+│
 ├── services/
-│   ├── fcfs.py                    # FCFS baseline construction
-│   ├── emission.py                # CO₂ calculations
-│   ├── orchestrator.py            # End-to-end routing workflow
+│   ├── config.py                       # Routing and emission configuration
+│   ├── emission.py                     # CO₂ calculations
+│   ├── fcfs.py                         # FCFS chronological ordering
+│   ├── orchestrator.py                 # Central routing workflow
+│   │
 │   └── routing/
-│       ├── distance_matrix.py     # Haversine and OSRM matrices
-│       ├── two_opt.py             # 2-Opt heuristic
-│       ├── bottleneck.py          # Edge penalties and suffix rerouting
-│       ├── road_routing.py        # OSRM geometry and detour logic
-│       └── leg_distance.py        # Per-leg metrics
+│       ├── distance_matrix.py           # Haversine reference + OSRM matrices
+│       ├── two_opt.py                   # 2-Opt heuristic + audit
+│       ├── bottleneck.py                # Edge penalties + suffix rerouting
+│       ├── road_routing.py              # OSRM route geometry + detours
+│       └── leg_distance.py              # Per-leg distance information
+│
 ├── database/
-│   ├── schema.sql                 # Relational schema
-│   ├── connection.py              # SQLite connection and initialization
-│   └── last_mile_co2.db           # Bundled demonstration database
-├── data/                           # Sample orders and seed generator
-├── tests/                          # Unit and integration-oriented checks
+│   ├── schema.sql                       # SQLite relational schema
+│   ├── connection.py                    # DB connection + schema migrations
+│   └── last_mile_co2.db                 # Demonstration database
+│
+├── data/
+│   └── sample_orders.csv                # 30-order demonstration dataset
+│
+├── tests/
+│   └── test_routing_scenarios.py        # Routing and disruption tests
+│
 └── requirements.txt
-```
+~~~
 
-## Getting Started
+---
+
+## 9. Data and Database Model
+
+The SQLite schema contains seven core entities:
+
+~~~text
+Hubs
+  │
+  └── Delivery Batches ─── Vehicles
+          │
+          └── Orders ─── Customers
+                │
+                └── Route Stops ─── Routes
+~~~
+
+The Optimization page currently uses the bundled 30-order CSV as the routing demonstration dataset while the selected database batch provides application context and the persistence target.
+
+The batch selector is prepared for future multi-batch expansion; the current optimization demo remains a single 30-order dataset.
+
+---
+
+## 10. Running Locally
 
 ### Prerequisites
 
-- Python 3.12 or newer
-- Internet access for the default public OSRM endpoint
+- Python 3.12+
 - Git
+- Internet access for the public OSRM endpoint
 
 ### Installation
 
-```bash
+~~~bash
 git clone https://github.com/gaoxanh/last-mile-route-optimization.git
 cd last-mile-route-optimization
 
 python -m venv .venv
-```
+~~~
 
-Activate the virtual environment:
+Windows PowerShell:
 
-```bash
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
+~~~powershell
+.venvScriptsActivate.ps1
+~~~
 
-# macOS/Linux
+macOS/Linux:
+
+~~~bash
 source .venv/bin/activate
-```
+~~~
 
-Install dependencies and start the application:
+Install dependencies:
 
-```bash
+~~~bash
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+~~~
+
+Run the application:
+
+~~~bash
 streamlit run app.py
-```
+~~~
 
-Streamlit will print the local URL, typically `http://localhost:8501`.
+---
 
-## Configuration
+## 11. Configuration
 
-The routing service reads these optional environment variables:
-
-| Variable | Default | Description |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `OSRM_URL` | `https://router.project-osrm.org` | Base URL of the OSRM server. |
-| `OSRM_TIMEOUT_SECONDS` | `20` | HTTP timeout for OSRM requests. |
+| OSRM_URL | https://router.project-osrm.org | OSRM server endpoint |
+| OSRM_TIMEOUT_SECONDS | 20 | OSRM request timeout |
 
 Example:
 
-```bash
+~~~bash
 export OSRM_URL="http://localhost:5000"
 export OSRM_TIMEOUT_SECONDS="30"
 streamlit run app.py
-```
+~~~
 
-For reliable or high-volume use, run a dedicated OSRM instance instead of relying on the public demonstration server.
+For reproducible or high-volume experiments, a dedicated OSRM instance is preferable to the public demonstration endpoint.
 
-## Data and Database
+---
 
-The repository includes `data/sample_orders.csv` and a demonstration SQLite database. The relational model contains hubs, customers, vehicles, delivery batches, orders, routes, and route stops.
+## 12. Testing and Validation
 
-To initialize an empty database schema locally:
+The current routing test covers:
 
-```bash
-python -m database.connection
-```
+- 2-Opt does not worsen matrix route cost.
+- Hub start/end constraints.
+- Urgent-stop positioning.
+- Directed bottleneck penalties.
+- Preservation of the completed route prefix during suffix rerouting.
+- Normal service execution with FCFS and optimized routes.
 
-Back up `database/last_mile_co2.db` before replacing or reinitializing project data.
+Run the current routing test with:
 
-## Testing
-
-Install the test runner and execute the suite:
-
-```bash
+~~~bash
 pip install pytest
-pytest -q
-```
+pytest -q tests/test_routing_scenarios.py
+~~~
 
-You can also run the project validation scripts individually, for example:
+> The repository may still contain legacy test files from earlier project versions. The current routing test should be treated as the authoritative test file until the test directory is fully cleaned up.
 
-```bash
-python tests/check_two_opt.py
-python tests/check_emission.py
-python tests/validate_core.py
-```
+---
 
-Some routing operations require a reachable OSRM service. Tests that monkeypatch OSRM remain deterministic and do not depend on live route results.
+## 13. Current Scope and Limitations
 
-## Current Limitations
+### Implemented
 
-- 2-Opt is a local-search heuristic and does not guarantee a globally optimal route.
-- The current optimization page handles one batch/vehicle route rather than a full capacitated multi-vehicle VRP.
-- Traffic and weather events are simulated scenarios, not live sensor or API feeds.
-- Detours are constrained through penalties and intermediate waypoints because the public OSRM API does not expose dynamic road-closure editing.
-- Emissions are estimated with a constant distance-based factor and do not yet model speed, load, idling, vehicle condition, or road grade.
-- The bundled database and dashboard values are intended for demonstration and academic evaluation.
+- One delivery batch / one route.
+- 30 demonstration orders.
+- One hub.
+- Urgent-first routing.
+- FCFS baseline.
+- 2-Opt local search.
+- OSRM road-network costs.
+- Traffic/weather disruption simulation.
+- Prefix-preserving suffix rerouting.
+- Road-level hazard clearance checking.
+- CO₂ estimation.
+- SQLite persistence.
+- Streamlit visualization.
 
-## Roadmap
+### Not yet implemented
 
-- Add capacity-constrained multi-vehicle routing with OR-Tools.
-- Integrate live traffic and weather data.
-- Support time windows, driver shifts, and service times.
-- Add authentication, role-based access, and audit logs.
-- Replace constant emission factors with vehicle- and operating-condition models.
-- Package reproducible benchmark datasets and CI workflows.
+- Full capacitated multi-vehicle VRP.
+- Multiple simultaneous vehicles in the optimizer.
+- Time windows and driver shifts.
+- Real-time traffic feeds.
+- Real-time weather feeds.
+- Live road-closure APIs.
+- Dynamic vehicle-specific emission models.
+- Speed, load, idling, road-grade, and driving-style emission factors.
+- Production authentication and role-based access control.
 
-## Contributing
+---
 
-Contributions are welcome. Please create a focused branch, add or update tests, run the test suite, and open a pull request describing the problem and the proposed change.
+## 14. Academic Interpretation
 
-## License
+The prototype should be interpreted as a **decision-support and algorithm demonstration system**, not as a production dispatch platform.
 
-No license file is currently included. Unless the repository owner adds a license, the source remains under default copyright and should not be redistributed or reused beyond the permissions granted by GitHub and the owner.
+The main experimental comparison is:
 
-## Acknowledgements
+~~~text
+FCFS baseline
+     vs.
+Urgent-first 2-Opt
+     ↓
+Road distance / duration
+     ↓
+CO₂ estimation
+     ↓
+Disruption response
+~~~
 
-- [Streamlit](https://streamlit.io/) for the interactive application framework.
-- [Project OSRM](https://project-osrm.org/) for road-network routing services.
-- [OpenStreetMap](https://www.openstreetmap.org/) contributors for map and road data.
+For a fair experiment, FCFS and optimized routes should use:
 
-## Author
+- the same order dataset,
+- the same hub,
+- the same OSRM endpoint,
+- the same return-to-hub convention,
+- the same emission factor,
+- and the same disruption scenario when applicable.
+
+Under a fixed emission factor, CO₂ reduction is directly proportional to route-distance reduction.
+
+---
+
+## 15. Roadmap
+
+Possible next-stage extensions:
+
+1. Multi-vehicle capacitated VRP using OR-Tools.
+2. Time-window constraints.
+3. Real-time traffic and weather integration.
+4. Vehicle-specific emission models.
+5. Reproducible benchmark datasets and experiment logs.
+6. Automated CI testing and deployment validation.
+7. Authentication and role-based access control.
+8. More advanced disruption and recovery strategies.
+
+---
+
+## 16. License
+
+No license file is currently included in the repository. Unless a license is added, the source remains under default copyright.
+
+---
+
+## 17. Author
 
 Developed by [gaoxanh](https://github.com/gaoxanh).
