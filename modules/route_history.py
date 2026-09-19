@@ -14,6 +14,8 @@ def load_routes():
                 route_type,
                 distance_km,
                 co2_kg,
+                urgent_order_id,
+                scenario,
                 created_at
             FROM routes
             ORDER BY route_id DESC
@@ -68,7 +70,9 @@ if routes.empty:
 # ROUTE FILTER
 # -------------------------
 
-st.markdown('<div class="section-label">Saved routes</div>', unsafe_allow_html=True)
+st.markdown('<div class="panel-title">🗂️ &nbsp;Optimization runs</div>'
+            '<div class="panel-sub">Review saved FCFS and optimized routes, including the urgent order and disruption scenario</div>',
+            unsafe_allow_html=True)
 
 c1, c2 = st.columns(2)
 
@@ -111,9 +115,8 @@ if filtered.empty:
 
 
 route_labels = {
-    f"Route {int(row.route_id)} — "
-    f"{row.route_type} — "
-    f"Batch {int(row.batch_id)}": int(row.route_id)
+    f"Route {int(row.route_id)} · {row.route_type} · "
+    f"Batch {int(row.batch_id)} · Urgent {row.urgent_order_id or '—'} · {row.scenario or 'Normal'}": int(row.route_id)
     for row in filtered.itertuples()
 }
 
@@ -138,9 +141,10 @@ st.divider()
 k1, k2, k3, k4 = st.columns(4)
 
 k1.metric(
-    "Route Type",
-    str(route["route_type"]),
+    "Route",
+    f"#{int(route['route_id'])}",
 )
+
 
 k2.metric(
     "Distance",
@@ -159,13 +163,21 @@ k4.metric(
     f"{len(stops):,}",
 )
 
+st.caption(
+    f"**{route['route_type']}** · Batch {int(route['batch_id'])} · "
+    f"Vehicle {int(route['vehicle_id'])} · Urgent {route['urgent_order_id'] or '—'} · "
+    f"Scenario: {route['scenario'] or 'Normal'}"
+)
+
 
 # -------------------------
 # STOP TABLE
 # -------------------------
 
 st.divider()
-st.markdown('<div class="section-label">Delivery sequence</div>', unsafe_allow_html=True)
+st.markdown('<div class="panel-title">🧭 &nbsp;Delivery sequence</div>'
+            '<div class="panel-sub">Stop order and road distance from the previous delivery point</div>',
+            unsafe_allow_html=True)
 
 if stops.empty:
     st.warning("Route này chưa có route stops.")
@@ -194,6 +206,16 @@ else:
         display_stops,
         use_container_width=True,
         hide_index=True,
+        height=430,
+        column_config={
+            "Sequence": st.column_config.NumberColumn("Stop", format="%d"),
+            "Order ID": st.column_config.TextColumn("Order"),
+            "Customer": st.column_config.TextColumn("Customer"),
+            "Distance (km)": st.column_config.NumberColumn("Distance (km)", format="%.2f"),
+            "Latitude": st.column_config.NumberColumn("Lat", format="%.5f"),
+            "Longitude": st.column_config.NumberColumn("Lon", format="%.5f"),
+            "Status": st.column_config.TextColumn("Status"),
+        },
     )
 
 
@@ -220,7 +242,9 @@ if {"latitude", "longitude"}.issubset(stops.columns):
 
     if not map_df.empty:
         st.divider()
-        st.markdown('<div class="section-label">Route stops map</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-title">🗺️ &nbsp;Route map</div>'
+                    '<div class="panel-sub">Customer stop sequence for the selected route</div>',
+                    unsafe_allow_html=True)
         st.map(
             map_df,
             latitude="latitude",
