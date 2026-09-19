@@ -278,7 +278,8 @@ def render_route_map(stops_df, batch_id):
     route_points = [hub_point] + stop_points + [hub_point]
 
     try:
-        road = get_road_route(route_points)
+        with st.spinner("Loading road geometry..."):
+            road = get_road_route(route_points)
         path = [[float(lon), float(lat)] for lon, lat in road["geometry"]]
         route_source = (
             f'OSRM road geometry · {road["distance_km"]:.2f} km · '
