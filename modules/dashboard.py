@@ -37,14 +37,11 @@ co2_pct = saved_co2 / fcfs_co2 * 100 if fcfs_co2 else 0
 heading, actions = st.columns([5, 2], vertical_alignment="bottom")
 with heading:
     st.markdown('<div class="page-heading"><h1>Operations overview</h1>'
-                '<p>Monitor delivery efficiency and environmental impact</p></div>',
+                '<p>Live database snapshot of delivery performance</p></div>',
                 unsafe_allow_html=True)
 with actions:
     c1, c2 = st.columns([1, 1.15])
-    c1.selectbox("Period", ["Last 7 days", "Last 30 days", "This quarter"], index=1,
-                 label_visibility="collapsed")
-    c2.page_link("modules/optimization.py", label="Optimize routes", icon="🧭",
-                 use_container_width=True)
+    c2.page_link("modules/optimization.py", label="Run optimization", icon="🧭", use_container_width=True)
 
 cards = [("📦", "Total orders", f"{total:,}", ""),
          ("◷", "Pending orders", f"{pending:,}", ""),
@@ -71,7 +68,7 @@ performance, impact = st.columns([1.85, 1], gap="medium")
 with performance:
     with st.container(border=True):
         st.markdown('<div class="panel-title">▥ &nbsp;Route performance</div>'
-                    '<div class="panel-sub">Compare FCFS and optimized route results</div>'
+                    '<div class="panel-sub">Recorded FCFS and optimized routes in the database</div>'
                     '<div style="text-align:right;font-size:10px;color:#71806F">'
                     '<span style="color:#A9C1A5">●</span> FCFS (Current)&nbsp;&nbsp;'
                     '<span style="color:#394C38">●</span> Optimized</div>', unsafe_allow_html=True)
@@ -81,7 +78,7 @@ with impact:
     with st.container(border=True):
         optimized_share = opt_co2 / fcfs_co2 * 100 if fcfs_co2 else 0
         st.markdown(f"""<div class="panel-title">🍃 &nbsp;Environmental impact</div>
-        <div class="panel-sub">Emission reduction after optimization</div>
+        <div class="panel-sub">CO₂ difference across recorded route types</div>
         <div style="display:grid;place-items:center;padding:12px">
         <div style="width:138px;height:138px;border-radius:50%;display:grid;place-items:center;
         background:conic-gradient(#394C38 0 {optimized_share:.1f}%,#B8CEB3 {optimized_share:.1f}% 100%)">
@@ -96,7 +93,7 @@ recent = query_df("""SELECT route_id,batch_id,vehicle_id,route_type,
 with st.container(border=True):
     title, link = st.columns([5, 1])
     title.markdown('<div class="panel-title">🚚 &nbsp;Recent routes</div>'
-                   '<div class="panel-sub">Latest recorded delivery routes</div>', unsafe_allow_html=True)
+                   '<div class="panel-sub">Latest route records stored in the database</div>', unsafe_allow_html=True)
     link.page_link("modules/route_history.py", label="View all routes →", use_container_width=True)
     if recent.empty:
         st.info("Chưa có route nào được lưu.")
