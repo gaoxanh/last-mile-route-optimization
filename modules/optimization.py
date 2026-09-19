@@ -1,5 +1,5 @@
 from pathlib import Path
-import base64
+import base64 as _base64
 
 import pandas as pd
 import streamlit as st
@@ -150,7 +150,7 @@ def _build_marker_dataframe(route_orders, urgent_order_id, color_theme):
                 font-size="22" font-weight="700" fill="white">{sequence}</text>
           <path d="M24 51 L36 68 L48 51 Z" fill="{marker_color}"/>
         </svg>"""
-        icon_url = "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
+        icon_url = "data:image/svg+xml;base64," + _base64.b64encode(svg.encode()).decode()
         rows[-1]["icon_data"] = {
             "url": icon_url,
             "width": 72,
