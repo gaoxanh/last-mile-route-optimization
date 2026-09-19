@@ -13,6 +13,7 @@ def load_routes():
                 vehicle_id,
                 route_type,
                 distance_km,
+                duration_min,
                 co2_kg,
                 urgent_order_id,
                 scenario,
@@ -163,7 +164,7 @@ k1, k2, k3, k4 = st.columns(4)
 k1.metric("Stops", f"{total_stops}")
 k2.metric("Delivered", f"{delivered_count}")
 k3.metric("Pending", f"{pending_count}")
-k4.metric("Distance", f"{float(route['distance_km']):.2f} km")
+k4.metric("Duration", f"{float(route['duration_min'] or 0):.0f} min")
 
 st.progress(
     progress,
@@ -172,7 +173,8 @@ st.progress(
 )
 
 st.caption(
-    f"Route plan: **{route['route_type']}** · CO₂ {float(route['co2_kg']):.2f} kg · "
+    f"Route plan: **{route['route_type']}** · Distance {float(route['distance_km']):.2f} km · "
+    f"CO₂ {float(route['co2_kg']):.2f} kg · "
     f"Urgent {route['urgent_order_id'] or '—'} · Scenario {route['scenario'] or 'Normal'}"
 )
 
@@ -287,6 +289,7 @@ details = pd.DataFrame({
         "Vehicle ID",
         "Route Type",
         "Total Distance",
+        "Estimated Duration",
         "Total CO₂",
         "Number of Stops",
         "Urgent Order",
@@ -299,6 +302,7 @@ details = pd.DataFrame({
         route["vehicle_id"],
         route["route_type"],
         f"{float(route['distance_km']):.2f} km",
+        f"{float(route['duration_min'] or 0):.0f} min",
         f"{float(route['co2_kg']):.2f} kg",
         len(stops),
         route["urgent_order_id"] or "—",
