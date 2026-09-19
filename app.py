@@ -1,8 +1,8 @@
-"""Unified Streamlit UI for the Last-Mile CO2 Optimization application.
+"""Application entrypoint for the Last-Mile CO₂ Optimization system.
 
-Run with: streamlit run app.py
-Replace the demo data/functions in the DATA section with your repository or
-optimizer calls when integrating the UI into the full project.
+The operational pages live in ``modules/`` and are registered here through
+Streamlit navigation. Shared branding and navigation styling remain in this
+entrypoint so all pages use the same shell.
 """
 
 from __future__ import annotations
