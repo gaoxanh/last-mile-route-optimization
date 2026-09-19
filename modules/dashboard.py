@@ -22,6 +22,8 @@ compare = query_df("""
         o.route_id AS optimized_route_id,
         f.distance_km AS fcfs_km,
         o.distance_km AS optimized_km,
+        f.duration_min AS fcfs_duration_min,
+        o.duration_min AS optimized_duration_min,
         f.co2_kg AS fcfs_co2,
         o.co2_kg AS optimized_co2,
         o.batch_id,
@@ -97,6 +99,7 @@ with st.container(border=True):
         f'<span><b>Vehicle:</b> {vehicle_id}</span>'
         f'<span><b>Urgent:</b> {urgent_order_id}</span>'
         f'<span><b>Scenario:</b> {scenario}</span>'
+        f'<span><b>Time:</b> {opt_duration:.0f} min</span>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -118,6 +121,8 @@ with performance:
 with impact:
     with st.container(border=True):
         optimized_share = opt_co2 / fcfs_co2 * 100 if fcfs_co2 else 0
+fcfs_duration = float(compare.iloc[0]["fcfs_duration_min"] or 0) if not compare.empty else 0
+opt_duration = float(compare.iloc[0]["optimized_duration_min"] or 0) if not compare.empty else 0
         st.markdown(f"""<div class="panel-title">🍃 &nbsp;Environmental impact</div>
         <div class="panel-sub">CO₂ difference for the latest optimization run</div>
         <div style="display:grid;place-items:center;padding:12px">
@@ -129,7 +134,7 @@ with impact:
         <span>A cleaner, greener delivery network.</span></div>""", unsafe_allow_html=True)
 
 recent = query_df("""SELECT route_id,batch_id,vehicle_id,route_type,urgent_order_id,scenario,
-    ROUND(distance_km,2) distance_km,ROUND(co2_kg,2) co2_kg,created_at
+    ROUND(distance_km,2) distance_km,ROUND(duration_min,0) duration_min,ROUND(co2_kg,2) co2_kg,created_at
     FROM routes ORDER BY route_id DESC LIMIT 6""")
 with st.container(border=True):
     title, link = st.columns([5, 1])
@@ -140,7 +145,7 @@ with st.container(border=True):
         st.info("Chưa có route nào được lưu.")
     else:
         table = recent.rename(columns={"route_id":"Route ID","batch_id":"Batch","vehicle_id":"Vehicle",
-            "route_type":"Type","urgent_order_id":"Urgent","scenario":"Scenario","distance_km":"Distance (km)","co2_kg":"CO₂ (kg)","created_at":"Created"})
+            "route_type":"Type","urgent_order_id":"Urgent","scenario":"Scenario","distance_km":"Distance (km)","duration_min":"Duration (min)","co2_kg":"CO₂ (kg)","created_at":"Created"})
         st.dataframe(table, hide_index=True, use_container_width=True, height=245)
 
 st.caption(f"Database routes: {int(routes_df.iloc[0]['total_routes'] or 0)} · "
