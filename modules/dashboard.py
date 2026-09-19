@@ -69,10 +69,11 @@ with actions:
     c1, c2 = st.columns([1, 1.15])
     c2.page_link("modules/optimization.py", label="Run optimization", icon="🧭", use_container_width=True)
 
+latest_optimized_km = float(compare.iloc[0]["optimized_km"]) if not compare.empty else 0.0
 cards = [("📦", "Total orders", f"{total:,}", ""),
          ("◷", "Pending orders", f"{pending:,}", ""),
-         ("🛣️", "Recorded routes", f"{int(routes_df.iloc[0]['total_routes'] or 0):,}", ""),
-         ("📍", "Recorded distance", f"{float(routes_df.iloc[0]['total_km'] or 0):.2f} km", "")]
+         ("🛣️", "Recorded routes", f"{int(routes_df.iloc[0]['total_routes'] or 0):,}", "FCFS + optimized plans"),
+         ("📍", "Latest optimized route", f"{latest_optimized_km:.2f} km", "Latest recorded run")]
 markup = "".join(
     f'<div class="metric-card"><div class="metric-icon">{icon}</div><div>'
     f'<div class="metric-label">{label}</div><div class="metric-value">{value}'
@@ -152,6 +153,8 @@ with st.container(border=True):
             "route_type":"Type","urgent_order_id":"Urgent","scenario":"Scenario","distance_km":"Distance (km)","duration_min":"Duration (min)","co2_kg":"CO₂ (kg)","created_at":"Created"})
         st.dataframe(table, hide_index=True, use_container_width=True, height=245)
 
-st.caption(f"Database routes: {int(routes_df.iloc[0]['total_routes'] or 0)} · "
-           f"Recorded distance: {float(routes_df.iloc[0]['total_km'] or 0):.2f} km · "
-           f"Recorded CO₂: {float(routes_df.iloc[0]['total_co2'] or 0):.2f} kg")
+st.caption(
+    f"Database: {int(routes_df.iloc[0]['total_routes'] or 0)} route records · "
+    f"Total saved CO₂: {float(routes_df.iloc[0]['total_co2'] or 0):.2f} kg. "
+    f"Recorded distance is kept in Route History by individual run."
+)
