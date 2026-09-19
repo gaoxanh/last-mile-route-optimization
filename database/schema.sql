@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS routes (
     vehicle_id INTEGER NOT NULL,
     route_type TEXT NOT NULL CHECK (route_type IN ('FCFS', 'OPTIMIZED')),
     distance_km REAL DEFAULT 0.0,
+    duration_min REAL DEFAULT 0.0,
     co2_kg REAL DEFAULT 0.0,
     urgent_order_id TEXT,
     scenario TEXT DEFAULT 'Normal',
