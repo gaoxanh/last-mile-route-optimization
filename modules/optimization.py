@@ -181,11 +181,15 @@ def build_single_map(hub, orders, road_geometry, color_path, color_marker, urgen
             # visible even when markers are close together.
             pdk.Layer(
                 "TextLayer", id=f"customer-labels-{color_path[0]}", data=marker_df,
-                get_position="[longitude, latitude]", get_text="label",
-                get_size=22, get_color=[255, 255, 255, 255],
-                get_text_anchor="middle", get_alignment_baseline="center",
-                get_pixel_offset=[0, 0],
-                billboard=True, pickable=False,
+                get_position="[longitude, latitude]",
+                get_text="sequence",
+                get_size=20,
+                get_color=[255, 255, 255, 255],
+                get_text_anchor="middle",
+                get_alignment_baseline="center",
+                billboard=True,
+                font_weight=700,
+                pickable=False,
             )
         ])
 
