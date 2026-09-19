@@ -444,32 +444,6 @@ if run_btn:
 # --- DISPLAY ---
 if "optimization_result" in st.session_state:
     result = st.session_state["optimization_result"]
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Khoảng cách gốc (FCFS)", f"{result['fcfs_distance']:.2f} km")
-    m2.metric("Khoảng cách sau tối ưu", f"{result['optimized_distance']:.2f} km", delta=f"-{result['distance_reduction']:.1f}%")
-    m3.metric("Khí thải CO₂ gốc (FCFS)", f"{result['fcfs_co2']:.2f} kg")
-    m4.metric("Khí thải CO₂ sau tối ưu", f"{result['optimized_co2']:.2f} kg", delta=f"-{result['co2_reduction']:.1f}%")
-
-    # --- AUDIT: chi phí dùng trực tiếp trong 2-Opt ---
-    with st.expander("🔎 Kiểm tra chi phí thuật toán (OSRM Matrix)", expanded=True):
-        audit = result.get("two_opt_audit", {})
-        a1, a2, a3, a4 = st.columns(4)
-        a1.metric("FCFS · OSRM Matrix", f"{result.get('fcfs_matrix_cost_km', 0):.2f} km")
-        a2.metric("2-Opt · Matrix trước", f"{audit.get('initial_cost_km', 0):.2f} km")
-        a3.metric("2-Opt · Matrix sau", f"{audit.get('final_cost_km', result.get('two_opt_matrix_cost_km', 0)):.2f} km")
-        a4.metric("2-Opt cải thiện", f"{audit.get('improvement_km', 0):.2f} km")
-        st.caption(
-            "Chi phí 2-Opt được tính từ OSRM Table Matrix; KPI phía trên dùng khoảng cách từ OSRM Route API. "
-            "Route có thay đổi sau 2-Opt: " + ("Có" if audit.get("changed") else "Không") + "."
-        )
-
-    st.divider()
-
-    st.markdown(
-        '<div class="panel-title">📊 &nbsp;Kết quả tối ưu</div>'
-        '<div class="panel-sub">So sánh trực tiếp FCFS và 2-Opt · màu sắc đồng bộ với bản đồ tuyến</div>',
-        unsafe_allow_html=True,
-    )
 
     fcfs_km = float(result["fcfs_distance"])
     opt_km = float(result["optimized_distance"])
@@ -482,47 +456,56 @@ if "optimization_result" in st.session_state:
     co2_saved = fcfs_co2 - opt_co2
     time_saved = fcfs_time - opt_time
 
+    # Gom toàn bộ KPI vào một khối duy nhất: không lặp lại FCFS/2-Opt ở hai nơi.
+    st.markdown(
+        '<div class="panel-title">📊 &nbsp;Kết quả tối ưu</div>'
+        '<div class="panel-sub">So sánh trực tiếp FCFS và 2-Opt · KPI lấy từ OSRM Route API</div>',
+        unsafe_allow_html=True,
+    )
+
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Quãng đường tối ưu", f"{opt_km:.2f} km", f"-{distance_saved:.2f} km")
-    k2.metric("CO₂ sau tối ưu", f"{opt_co2:.2f} kg", f"-{co2_saved:.2f} kg")
-    k3.metric("Thời gian di chuyển", f"{opt_time:.0f} min", f"-{time_saved:.0f} min")
-    k4.metric("Đơn hàng", f"{len(fcfs_orders)}", "Đã tối ưu")
-
-    def comparison_bars(label, before, after, unit):
-        peak = max(before, after, 1.0)
-        before_width = before / peak * 100
-        after_width = after / peak * 100
-        return f'''
-        <div style="margin:18px 0 26px">
-          <div style="font-weight:700;font-size:13px;margin-bottom:10px">{label}</div>
-          <div style="display:grid;grid-template-columns:72px 1fr 76px;gap:10px;align-items:center;margin-bottom:8px">
-            <span style="font-size:12px;color:#1E40AF">FCFS</span>
-            <div style="height:14px;background:#EEF1F5;border-radius:5px;overflow:hidden">
-              <div style="height:100%;width:{before_width:.1f}%;background:#1E40AF;border-radius:5px"></div>
-            </div>
-            <span style="font-size:12px;text-align:right">{before:.2f} {unit}</span>
-          </div>
-          <div style="display:grid;grid-template-columns:72px 1fr 76px;gap:10px;align-items:center">
-            <span style="font-size:12px;color:#DC2626;font-weight:700">2-Opt</span>
-            <div style="height:14px;background:#F3EEEE;border-radius:5px;overflow:hidden">
-              <div style="height:100%;width:{after_width:.1f}%;background:#DC2626;border-radius:5px"></div>
-            </div>
-            <span style="font-size:12px;text-align:right;font-weight:700">{after:.2f} {unit}</span>
-          </div>
-        </div>
-        '''
-
-    with st.container(border=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(comparison_bars("Total distance", fcfs_km, opt_km, "km"), unsafe_allow_html=True)
-        with c2:
-            st.markdown(comparison_bars("CO₂ emissions", fcfs_co2, opt_co2, "kg"), unsafe_allow_html=True)
+    k1.metric(
+        "Khoảng cách FCFS",
+        f"{fcfs_km:.2f} km",
+    )
+    k2.metric(
+        "Khoảng cách sau 2-Opt",
+        f"{opt_km:.2f} km",
+        delta=f"-{distance_saved:.2f} km · -{result['distance_reduction']:.1f}%",
+    )
+    k3.metric(
+        "CO₂ sau 2-Opt",
+        f"{opt_co2:.2f} kg",
+        delta=f"-{co2_saved:.2f} kg · -{result['co2_reduction']:.1f}%",
+    )
+    k4.metric(
+        "Thời gian di chuyển",
+        f"{opt_time:.0f} phút",
+        delta=f"-{time_saved:.0f} phút",
+    )
 
     st.caption(
-        f"Tiết kiệm so với FCFS: {distance_saved:.2f} km · "
+        f"30 đơn hàng · Tiết kiệm so với FCFS: {distance_saved:.2f} km · "
         f"{co2_saved:.2f} kg CO₂ · {time_saved:.0f} phút"
     )
+
+    # Audit giữ lại nhưng thu gọn, chỉ mở khi cần kiểm tra thuật toán.
+    with st.expander("🔎 Chi tiết kiểm chứng 2-Opt (OSRM Matrix)", expanded=False):
+        audit = result.get("two_opt_audit", {})
+        a1, a2, a3, a4 = st.columns(4)
+        a1.metric("FCFS · Matrix", f"{result.get('fcfs_matrix_cost_km', 0):.2f} km")
+        a2.metric("2-Opt · trước", f"{audit.get('initial_cost_km', 0):.2f} km")
+        a3.metric(
+            "2-Opt · sau",
+            f"{audit.get('final_cost_km', result.get('two_opt_matrix_cost_km', 0)):.2f} km",
+        )
+        a4.metric("Cải thiện", f"{audit.get('improvement_km', 0):.2f} km")
+        st.caption(
+            "2-Opt tối ưu trên OSRM Table Matrix; KPI phía trên dùng OSRM Route API. "
+            "Route có thay đổi sau 2-Opt: " + ("Có" if audit.get("changed") else "Không") + "."
+        )
+
+    st.divider()
 
     st.divider()
 
