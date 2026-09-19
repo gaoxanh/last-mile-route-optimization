@@ -52,7 +52,7 @@ routes = load_routes()
 
 st.markdown(
     '<div class="page-heading"><h1>Route history</h1>'
-    '<p>Track completed routes and inspect delivery performance</p></div>',
+    '<p>Inspect recorded routes, delivery sequence and route-level performance</p></div>',
     unsafe_allow_html=True,
 )
 
