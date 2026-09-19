@@ -505,10 +505,6 @@ if "optimization_result" in st.session_state:
             "Route có thay đổi sau 2-Opt: " + ("Có" if audit.get("changed") else "Không") + "."
         )
 
-    st.divider()
-
-    st.divider()
-
     if result.get("scenario") != "Normal":
         st.subheader("🗺️ So sánh tuyến trước và sau xử lý sự cố")
         map_col_left, map_col_right = st.columns(2)
