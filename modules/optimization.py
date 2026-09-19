@@ -338,6 +338,19 @@ if "optimization_result" in st.session_state:
     m3.metric("Khí thải CO₂ gốc (FCFS)", f"{result['fcfs_co2']:.2f} kg")
     m4.metric("Khí thải CO₂ sau tối ưu", f"{result['optimized_co2']:.2f} kg", delta=f"-{result['co2_reduction']:.1f}%")
 
+    # --- AUDIT: chi phí dùng trực tiếp trong 2-Opt ---
+    with st.expander("🔎 Kiểm tra chi phí thuật toán (OSRM Matrix)", expanded=True):
+        audit = result.get("two_opt_audit", {})
+        a1, a2, a3, a4 = st.columns(4)
+        a1.metric("FCFS · OSRM Matrix", f"{result.get('fcfs_matrix_cost_km', 0):.2f} km")
+        a2.metric("2-Opt · Matrix trước", f"{audit.get('initial_cost_km', 0):.2f} km")
+        a3.metric("2-Opt · Matrix sau", f"{audit.get('final_cost_km', result.get('two_opt_matrix_cost_km', 0)):.2f} km")
+        a4.metric("2-Opt cải thiện", f"{audit.get('improvement_km', 0):.2f} km")
+        st.caption(
+            "Chi phí 2-Opt được tính từ OSRM Table Matrix; KPI phía trên dùng khoảng cách từ OSRM Route API. "
+            "Route có thay đổi sau 2-Opt: " + ("Có" if audit.get("changed") else "Không") + "."
+        )
+
     st.divider()
 
     st.subheader("📊 Phân Tích Chỉ Số Thay Đổi Biến Động")
