@@ -177,19 +177,9 @@ def find_alternative_route_around_leg(
             if clearance >= clearance_m and route["distance_km"] <= (original_distance * 8.0 + 5.0):
                 candidates.append({**route, "clearance_m": clearance})
 
-    if not candidates:
-        # Nếu vẫn không tìm thấy đường vòng nào thỏa mãn clearance_m, hạ chuẩn clearance xuống một nửa để cứu vãn demo chứ không giữ nguyên đường cũ
-        for angle in (90, 270):
-            for offset_m in (1000.0, 1500.0):
-                waypoint = _offset_point(incident_point, bearing + angle, offset_m)
-                try:
-                    route = get_road_route([start, waypoint, end])
-                except RoutingError:
-                    continue
-                clearance = _minimum_clearance_m(route["geometry"], incident_point)
-                if clearance >= (clearance_m * 0.3):
-                    candidates.append({**route, "clearance_m": clearance})
-
+    # Không hạ chuẩn clearance để "cứu" demo. Nếu không có ứng viên đạt
+    # bán kính yêu cầu thì phải báo thất bại, tránh hiển thị một tuyến vẫn đi
+    # vào vùng sự cố như thể đã reroute thành công.
     if not candidates:
         raise RoutingError("No OSRM detour satisfies the incident clearance")
 
