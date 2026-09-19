@@ -31,13 +31,16 @@ compare = query_df("""
         o.created_at
     FROM routes f
     JOIN routes o
-      ON o.route_type = 'OPTIMIZED'
-     AND f.route_type = 'FCFS'
-     AND f.batch_id = o.batch_id
-     AND f.route_id < o.route_id
-    WHERE o.route_id = (
-        SELECT MAX(route_id) FROM routes WHERE route_type = 'OPTIMIZED'
-    )
+      ON o.route_id = (
+          SELECT MAX(route_id) FROM routes WHERE route_type = 'OPTIMIZED'
+      )
+     AND f.route_id = (
+          SELECT MAX(route_id)
+          FROM routes
+          WHERE route_type = 'FCFS'
+            AND batch_id = o.batch_id
+            AND route_id < o.route_id
+      )
 """)
 
 total = int(orders_df.iloc[0]["total_orders"] or 0)
