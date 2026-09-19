@@ -57,6 +57,8 @@ def ensure_database_ready():
                     conn.execute("ALTER TABLE routes ADD COLUMN urgent_order_id TEXT")
                 if "scenario" not in route_columns:
                     conn.execute("ALTER TABLE routes ADD COLUMN scenario TEXT DEFAULT 'Normal'")
+                if "duration_min" not in route_columns:
+                    conn.execute("ALTER TABLE routes ADD COLUMN duration_min REAL DEFAULT 0.0")
                 conn.commit()
 
                 print(f"✅ Hệ thống sẵn sàng. Tổng số đơn hàng hiện tại: {result[0]}")
