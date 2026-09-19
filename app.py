@@ -7,19 +7,7 @@ optimizer calls when integrating the UI into the full project.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
-import math
-import random
-
-import pandas as pd
 import streamlit as st
-
-try:
-    import plotly.express as px
-    import plotly.graph_objects as go
-except ImportError:  # The pages still work when Plotly is unavailable.
-    px = None
-    go = None
 
 
 st.set_page_config(
@@ -28,61 +16,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-
-# -----------------------------------------------------------------------------
-# DATA - replace this block with your database/repository functions.
-# -----------------------------------------------------------------------------
-@st.cache_data
-def load_orders() -> pd.DataFrame:
-    rng = random.Random(42)
-    statuses = ["Pending"] * 12 + ["Assigned"] * 8 + ["Delivered"] * 10
-    priorities = ["Normal", "Normal", "Normal", "High", "Urgent"]
-    districts = ["District 1", "District 3", "Binh Thanh", "Thu Duc", "District 7"]
-    rows = []
-    for index in range(30):
-        rows.append(
-            {
-                "Order ID": f"ORD-{index + 1:03d}",
-                "Customer": f"Customer {index + 1:02d}",
-                "District": rng.choice(districts),
-                "Weight (kg)": round(rng.uniform(1.2, 18.0), 1),
-                "Priority": rng.choice(priorities),
-                "Time window": f"{8 + index % 9:02d}:00 - {10 + index % 9:02d}:00",
-                "Status": statuses[index],
-                "Latitude": 10.74 + rng.random() * 0.12,
-                "Longitude": 106.64 + rng.random() * 0.16,
-            }
-        )
-    return pd.DataFrame(rows)
-
-
-@st.cache_data
-def load_routes() -> pd.DataFrame:
-    base = date.today()
-    rows = []
-    for index in range(18):
-        optimized = index % 2 == 0
-        distance = 35.53 if optimized else 84.44
-        co2 = 2.13 if optimized else 5.07
-        rows.append(
-            {
-                "Route ID": f"R-{(base - timedelta(days=index // 3)).strftime('%Y%m%d')}-{index + 1:03d}",
-                "Date": base - timedelta(days=index // 3),
-                "Batch": f"B{1 + index // 6}",
-                "Vehicle": f"Van {1 + index % 3}",
-                "Type": "Optimized" if optimized else "FCFS",
-                "Orders": 5,
-                "Distance (km)": distance,
-                "CO2 (kg)": co2,
-                "Status": "Completed" if index > 2 else "Active",
-            }
-        )
-    return pd.DataFrame(rows)
-
-
-orders = load_orders()
-routes = load_routes()
 
 
 # -----------------------------------------------------------------------------
