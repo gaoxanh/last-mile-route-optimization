@@ -43,6 +43,8 @@ def save_demo_routes_to_db(result, fcfs_orders, batch_id, vehicle_id):
             conn.execute("ALTER TABLE routes ADD COLUMN urgent_order_id TEXT")
         if "scenario" not in columns:
             conn.execute("ALTER TABLE routes ADD COLUMN scenario TEXT DEFAULT 'Normal'")
+        if "duration_min" not in columns:
+            conn.execute("ALTER TABLE routes ADD COLUMN duration_min REAL DEFAULT 0.0")
         db_orders = conn.execute(
             """
             SELECT o.order_id, c.latitude, c.longitude
@@ -70,16 +72,17 @@ def save_demo_routes_to_db(result, fcfs_orders, batch_id, vehicle_id):
             cur = conn.execute(
                 """
                 INSERT INTO routes(
-                    batch_id, vehicle_id, route_type, distance_km, co2_kg,
+                    batch_id, vehicle_id, route_type, distance_km, duration_min, co2_kg,
                     urgent_order_id, scenario
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     int(batch_id),
                     int(vehicle_id),
                     route_type,
                     float(road["distance_km"]),
+                    float(road.get("duration_min", 0.0)),
                     float(road["distance_km"]) * 0.06,
                     str(result.get("urgent_order_id", "")),
                     str(result.get("scenario", "Normal")),
