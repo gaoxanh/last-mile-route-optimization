@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import pydeck as pdk
 
 from database.connection import get_connection
 
@@ -213,6 +214,48 @@ st.dataframe(
 
 
 # -------------------------
+# STATUS WORKFLOW
+# -------------------------
+
+st.divider()
+st.markdown(
+    '<div class="panel-title">🔄 &nbsp;Order status</div>'
+    '<div class="panel-sub">Update the operational status of a selected delivery order</div>',
+    unsafe_allow_html=True,
+)
+
+status_values = ["PENDING", "ASSIGNED", "IN_TRANSIT", "DELIVERED", "FAILED"]
+
+if not filtered.empty:
+    selected_order = st.selectbox(
+        "Selected order",
+        filtered["order_id"].astype(str).tolist(),
+        key="orders_status_order",
+    )
+    current_row = filtered[filtered["order_id"].astype(str) == str(selected_order)].iloc[0]
+    current_status = str(current_row["status"]).upper()
+    new_status = st.selectbox(
+        "New status",
+        status_values,
+        index=status_values.index(current_status) if current_status in status_values else 0,
+        key="orders_status_value",
+    )
+
+    if st.button("Update order status", type="primary"):
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE orders SET status = ? WHERE order_id = ?",
+                (new_status, int(current_row["order_id"])),
+            )
+            conn.commit()
+        st.success(
+            f"Order {selected_order} updated to "
+            f"{new_status.replace('_', ' ').title()}."
+        )
+        st.rerun()
+
+
+# -------------------------
 # LOCATION PREVIEW
 # -------------------------
 
@@ -238,9 +281,62 @@ if {"latitude", "longitude"}.issubset(filtered.columns):
     map_df = map_df.dropna()
 
     if not map_df.empty:
-        st.map(
-            map_df,
-            latitude="latitude",
-            longitude="longitude",
-            size=30,
+        map_rows = []
+        for row in filtered.loc[map_df.index].itertuples():
+            status = str(row.status or "PENDING").upper()
+            if status == "DELIVERED":
+                color = [54, 130, 85]
+            elif status in {"FAILED", "CANCELLED"}:
+                color = [205, 72, 72]
+            elif status == "IN_TRANSIT":
+                color = [70, 120, 205]
+            elif status == "ASSIGNED":
+                color = [155, 105, 205]
+            else:
+                color = [220, 165, 45]
+            map_rows.append({
+                "lat": float(row.latitude),
+                "lon": float(row.longitude),
+                "label": str(row.order_id),
+                "customer": str(row.customer_id),
+                "status": status.replace("_", " ").title(),
+                "color": color,
+            })
+
+        points = pd.DataFrame(map_rows)
+        deck = pdk.Deck(
+            layers=[
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=points,
+                    get_position="[lon, lat]",
+                    get_fill_color="color",
+                    get_radius=90,
+                    radius_min_pixels=6,
+                    radius_max_pixels=12,
+                    pickable=True,
+                ),
+                pdk.Layer(
+                    "TextLayer",
+                    data=points,
+                    get_position="[lon, lat]",
+                    get_text="label",
+                    get_color=[255, 255, 255],
+                    get_size=11,
+                    get_alignment_baseline="'center'",
+                    get_text_anchor="'middle'",
+                ),
+            ],
+            initial_view_state=pdk.ViewState(
+                latitude=float(points["lat"].mean()),
+                longitude=float(points["lon"].mean()),
+                zoom=11.5,
+                pitch=0,
+            ),
+            tooltip={
+                "html": "<b>{label}</b><br/>Customer: {customer}<br/>Status: {status}",
+                "style": {"backgroundColor": "#263425", "color": "white"},
+            },
         )
+        st.pydeck_chart(deck, use_container_width=True)
+        st.caption("🟢 Delivered · 🔵 In transit · 🟣 Assigned · 🟡 Pending · 🔴 Failed")
