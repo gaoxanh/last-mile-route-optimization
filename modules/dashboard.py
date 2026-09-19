@@ -90,6 +90,9 @@ def bars(label, before, after):
       </div><span style="font-size:11px;line-height:23px">{before:.2f}<br><b>{after:.2f}</b></span></div>"""
 
 
+fcfs_duration = float(compare.iloc[0]["fcfs_duration_min"] or 0) if not compare.empty else 0
+opt_duration = float(compare.iloc[0]["optimized_duration_min"] or 0) if not compare.empty else 0
+
 with st.container(border=True):
     st.markdown(
         f'<div class="panel-title">🧭 &nbsp;Latest optimization run</div>'
