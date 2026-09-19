@@ -7,6 +7,24 @@ DB_PATH = os.path.join(BASE_DIR, "database", "last_mile_co2.db")
 SCHEMA_PATH = os.path.join(BASE_DIR, "database", "schema.sql")
 
 
+ROUTE_MIGRATIONS = {
+    "urgent_order_id": "ALTER TABLE routes ADD COLUMN urgent_order_id TEXT",
+    "scenario": "ALTER TABLE routes ADD COLUMN scenario TEXT DEFAULT 'Normal'",
+    "duration_min": "ALTER TABLE routes ADD COLUMN duration_min REAL DEFAULT 0.0",
+}
+
+
+def ensure_database_schema(conn):
+    """Apply lightweight migrations required by the current application."""
+    route_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(routes)").fetchall()
+    }
+    for column, statement in ROUTE_MIGRATIONS.items():
+        if column not in route_columns:
+            conn.execute(statement)
+    conn.commit()
+
+
 def get_connection():
     """Tạo kết nối đến SQLite DB và kích hoạt Foreign Key constraints."""
     # Kết nối ở chế độ Read-Only nếu chạy trên Cloud, giúp tránh lỗi ghi file hệ thống
@@ -48,18 +66,7 @@ def ensure_database_ready():
                     "SELECT COUNT(*) FROM orders"
                 ).fetchone()
 
-                # Lightweight migration for existing demo DB files.
-                route_columns = {
-                    row["name"]
-                    for row in conn.execute("PRAGMA table_info(routes)").fetchall()
-                }
-                if "urgent_order_id" not in route_columns:
-                    conn.execute("ALTER TABLE routes ADD COLUMN urgent_order_id TEXT")
-                if "scenario" not in route_columns:
-                    conn.execute("ALTER TABLE routes ADD COLUMN scenario TEXT DEFAULT 'Normal'")
-                if "duration_min" not in route_columns:
-                    conn.execute("ALTER TABLE routes ADD COLUMN duration_min REAL DEFAULT 0.0")
-                conn.commit()
+                ensure_database_schema(conn)
 
                 print(f"✅ Hệ thống sẵn sàng. Tổng số đơn hàng hiện tại: {result[0]}")
         except sqlite3.OperationalError:
