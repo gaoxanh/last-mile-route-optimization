@@ -1,4 +1,5 @@
 from pathlib import Path
+import base64
 
 import pandas as pd
 import streamlit as st
@@ -466,7 +467,7 @@ if "optimization_result" in st.session_state:
 
     st.markdown(
         '<div class="panel-title">📊 &nbsp;Kết quả tối ưu</div>'
-        '<div class="panel-sub">Gộp các chỉ số chính và so sánh trực tiếp FCFS với 2-Opt</div>',
+        '<div class="panel-sub">So sánh trực tiếp FCFS và 2-Opt · màu sắc đồng bộ với bản đồ tuyến</div>',
         unsafe_allow_html=True,
     )
 
@@ -487,63 +488,36 @@ if "optimization_result" in st.session_state:
     k3.metric("Thời gian di chuyển", f"{opt_time:.0f} min", f"-{time_saved:.0f} min")
     k4.metric("Đơn hàng", f"{len(fcfs_orders)}", "Đã tối ưu")
 
+    def comparison_bars(label, before, after, unit):
+        peak = max(before, after, 1.0)
+        before_width = before / peak * 100
+        after_width = after / peak * 100
+        return f'''
+        <div style="margin:18px 0 26px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:10px">{label}</div>
+          <div style="display:grid;grid-template-columns:72px 1fr 76px;gap:10px;align-items:center;margin-bottom:8px">
+            <span style="font-size:12px;color:#1E40AF">FCFS</span>
+            <div style="height:14px;background:#EEF1F5;border-radius:5px;overflow:hidden">
+              <div style="height:100%;width:{before_width:.1f}%;background:#1E40AF;border-radius:5px"></div>
+            </div>
+            <span style="font-size:12px;text-align:right">{before:.2f} {unit}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:72px 1fr 76px;gap:10px;align-items:center">
+            <span style="font-size:12px;color:#DC2626;font-weight:700">2-Opt</span>
+            <div style="height:14px;background:#F3EEEE;border-radius:5px;overflow:hidden">
+              <div style="height:100%;width:{after_width:.1f}%;background:#DC2626;border-radius:5px"></div>
+            </div>
+            <span style="font-size:12px;text-align:right;font-weight:700">{after:.2f} {unit}</span>
+          </div>
+        </div>
+        '''
+
     with st.container(border=True):
         c1, c2 = st.columns(2)
-
-        distance_df = pd.DataFrame({
-            "Phương án": ["FCFS", "2-Opt"],
-            "Quãng đường (km)": [fcfs_km, opt_km],
-        })
-        distance_chart = (
-            alt.Chart(distance_df)
-            .mark_bar(cornerRadius=6, size=52)
-            .encode(
-                y=alt.Y("Phương án:N", sort=["FCFS", "2-Opt"], title=None),
-                x=alt.X("Quãng đường (km):Q", title="km"),
-                color=alt.Color(
-                    "Phương án:N",
-                    scale=alt.Scale(
-                        domain=["FCFS", "2-Opt"],
-                        range=["#24479A", "#3D6B45"],
-                    ),
-                    legend=None,
-                ),
-                tooltip=[
-                    alt.Tooltip("Phương án:N"),
-                    alt.Tooltip("Quãng đường (km):Q", format=".2f"),
-                ],
-            )
-            .properties(height=190, title="Quãng đường di chuyển")
-        )
-
-        co2_df = pd.DataFrame({
-            "Phương án": ["FCFS", "2-Opt"],
-            "CO₂ (kg)": [fcfs_co2, opt_co2],
-        })
-        co2_chart = (
-            alt.Chart(co2_df)
-            .mark_bar(cornerRadius=6, size=52)
-            .encode(
-                y=alt.Y("Phương án:N", sort=["FCFS", "2-Opt"], title=None),
-                x=alt.X("CO₂ (kg):Q", title="kg"),
-                color=alt.Color(
-                    "Phương án:N",
-                    scale=alt.Scale(
-                        domain=["FCFS", "2-Opt"],
-                        range=["#24479A", "#3D6B45"],
-                    ),
-                    legend=None,
-                ),
-                tooltip=[
-                    alt.Tooltip("Phương án:N"),
-                    alt.Tooltip("CO₂ (kg):Q", format=".2f"),
-                ],
-            )
-            .properties(height=190, title="Khí thải CO₂")
-        )
-
-        c1.altair_chart(distance_chart, use_container_width=True)
-        c2.altair_chart(co2_chart, use_container_width=True)
+        with c1:
+            st.markdown(comparison_bars("Total distance", fcfs_km, opt_km, "km"), unsafe_allow_html=True)
+        with c2:
+            st.markdown(comparison_bars("CO₂ emissions", fcfs_co2, opt_co2, "kg"), unsafe_allow_html=True)
 
     st.caption(
         f"Tiết kiệm so với FCFS: {distance_saved:.2f} km · "
