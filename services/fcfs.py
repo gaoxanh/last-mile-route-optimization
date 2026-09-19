@@ -1,14 +1,13 @@
 """FCFS baseline route generation.
 
-This source module replaces the unusable stand-alone ``.pyc`` cache files and
-keeps the dictionary contract expected by ``pages/optimization.py``.
+FCFS is responsible only for defining the chronological baseline order.
+Distance, duration and emissions are calculated by the central routing
+orchestrator using the same OSRM road-network model as the optimised route.
 """
 
 from typing import Any
 
 import pandas as pd
-
-from services.routing.distance_matrix import haversine
 
 
 REQUIRED_COLUMNS = {
@@ -23,10 +22,11 @@ REQUIRED_COLUMNS = {
 
 
 def build_fcfs_route(df: pd.DataFrame) -> dict[str, Any]:
-    """Sort orders by creation time and create an open FCFS route.
+    """Sort orders by creation time and return the FCFS baseline data.
 
-    The returned route is ``hub -> customer 1 -> ... -> customer N`` and does
-    not include the return leg to the hub.
+    The route sequence itself is chronological. The central orchestrator is
+    responsible for adding the return-to-hub leg and calculating road-network
+    distance/duration.
     """
     missing = sorted(REQUIRED_COLUMNS.difference(df.columns))
     if missing:
@@ -36,7 +36,11 @@ def build_fcfs_route(df: pd.DataFrame) -> dict[str, Any]:
 
     orders = df.copy()
     orders["created_at"] = orders["created_at"].astype(str)
-    orders = orders.sort_values("created_at", ascending=True, kind="stable").reset_index(drop=True)
+    orders = orders.sort_values(
+        "created_at",
+        ascending=True,
+        kind="stable",
+    ).reset_index(drop=True)
 
     hub = (
         float(orders.iloc[0]["hub_latitude"]),
@@ -46,26 +50,10 @@ def build_fcfs_route(df: pd.DataFrame) -> dict[str, Any]:
         (float(row.latitude), float(row.longitude))
         for row in orders.itertuples()
     ]
-    points = [hub] + customers
-
-    legs = []
-    total_distance_km = 0.0
-    for sequence in range(1, len(points)):
-        distance_km = haversine(points[sequence - 1], points[sequence])
-        total_distance_km += distance_km
-        order = orders.iloc[sequence - 1]
-        legs.append({
-            "sequence": sequence,
-            "order_id": order["order_id"],
-            "customer_id": order["customer_id"],
-            "distance_from_previous_km": round(distance_km, 4),
-        })
 
     return {
         "hub": hub,
         "orders": orders,
         "customers": customers,
-        "points": points,
-        "legs": legs,
-        "total_distance_km": round(total_distance_km, 4),
+        "points": [hub] + customers,
     }
