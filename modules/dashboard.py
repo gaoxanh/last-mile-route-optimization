@@ -18,22 +18,26 @@ routes_df = query_df("""SELECT COUNT(*) total_routes,
     COALESCE(SUM(distance_km),0) total_km, COALESCE(SUM(co2_kg),0) total_co2 FROM routes""")
 compare = query_df("""
     SELECT
-        COALESCE(SUM(CASE WHEN r.route_type='FCFS' THEN r.distance_km ELSE 0 END),0) fcfs_km,
-        COALESCE(SUM(CASE WHEN r.route_type='OPTIMIZED' THEN r.distance_km ELSE 0 END),0) optimized_km,
-        COALESCE(SUM(CASE WHEN r.route_type='FCFS' THEN r.co2_kg ELSE 0 END),0) fcfs_co2,
-        COALESCE(SUM(CASE WHEN r.route_type='OPTIMIZED' THEN r.co2_kg ELSE 0 END),0) optimized_co2
-    FROM routes r
-    WHERE r.route_id IN (
-        SELECT MAX(f.route_id)
-        FROM routes f
-        JOIN routes o
-          ON o.batch_id = f.batch_id
-         AND o.route_type = 'OPTIMIZED'
-         AND f.route_type = 'FCFS'
-         AND f.route_id < o.route_id
-        WHERE o.route_id = (SELECT MAX(route_id) FROM routes WHERE route_type='OPTIMIZED')
+        f.route_id AS fcfs_route_id,
+        o.route_id AS optimized_route_id,
+        f.distance_km AS fcfs_km,
+        o.distance_km AS optimized_km,
+        f.co2_kg AS fcfs_co2,
+        o.co2_kg AS optimized_co2,
+        o.batch_id,
+        o.vehicle_id,
+        o.urgent_order_id,
+        o.scenario,
+        o.created_at
+    FROM routes f
+    JOIN routes o
+      ON o.route_type = 'OPTIMIZED'
+     AND f.route_type = 'FCFS'
+     AND f.batch_id = o.batch_id
+     AND f.route_id < o.route_id
+    WHERE o.route_id = (
+        SELECT MAX(route_id) FROM routes WHERE route_type = 'OPTIMIZED'
     )
-       OR r.route_id = (SELECT MAX(route_id) FROM routes WHERE route_type='OPTIMIZED')
 """)
 
 total = int(orders_df.iloc[0]["total_orders"] or 0)
@@ -46,6 +50,10 @@ saved_km = max(0.0, fcfs_km - opt_km)
 saved_co2 = max(0.0, fcfs_co2 - opt_co2)
 km_pct = saved_km / fcfs_km * 100 if fcfs_km else 0
 co2_pct = saved_co2 / fcfs_co2 * 100 if fcfs_co2 else 0
+urgent_order_id = str(compare.iloc[0]["urgent_order_id"] or "—") if not compare.empty else "—"
+scenario = str(compare.iloc[0]["scenario"] or "Normal") if not compare.empty else "—"
+batch_id = int(compare.iloc[0]["batch_id"]) if not compare.empty else 0
+vehicle_id = int(compare.iloc[0]["vehicle_id"]) if not compare.empty else 0
 
 heading, actions = st.columns([5, 2], vertical_alignment="bottom")
 with heading:
@@ -58,8 +66,8 @@ with actions:
 
 cards = [("📦", "Total orders", f"{total:,}", ""),
          ("◷", "Pending orders", f"{pending:,}", ""),
-         ("📍", "Distance saved", f"{saved_km:.2f} km", f"↓ {km_pct:.2f}%"),
-         ("🍃", "CO₂ saved", f"{saved_co2:.2f} kg", f"↓ {co2_pct:.2f}%")]
+         ("🛣️", "Recorded routes", f"{int(routes_df.iloc[0]['total_routes'] or 0):,}", ""),
+         ("📍", "Recorded distance", f"{float(routes_df.iloc[0]['total_km'] or 0):.2f} km", "")]
 markup = "".join(
     f'<div class="metric-card"><div class="metric-icon">{icon}</div><div>'
     f'<div class="metric-label">{label}</div><div class="metric-value">{value}'
@@ -77,11 +85,28 @@ def bars(label, before, after):
       </div><span style="font-size:11px;line-height:23px">{before:.2f}<br><b>{after:.2f}</b></span></div>"""
 
 
+with st.container(border=True):
+    st.markdown(
+        f'<div class="panel-title">🧭 &nbsp;Latest optimization run</div>'
+        f'<div class="panel-sub">Performance is shown for the latest recorded FCFS + optimized pair; the selected urgent order can change the route length.</div>'
+        f'<div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:12px;font-size:13px">'
+        f'<span><b>Batch:</b> {batch_id}</span>'
+        f'<span><b>Vehicle:</b> {vehicle_id}</span>'
+        f'<span><b>Urgent:</b> {urgent_order_id}</span>'
+        f'<span><b>Scenario:</b> {scenario}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        f'Latest run: FCFS {fcfs_km:.2f} km → Optimized {opt_km:.2f} km · '
+        f'Saved {saved_km:.2f} km ({km_pct:.2f}%) · CO₂ saved {saved_co2:.2f} kg ({co2_pct:.2f}%).'
+    )
+
 performance, impact = st.columns([1.85, 1], gap="medium")
 with performance:
     with st.container(border=True):
         st.markdown('<div class="panel-title">▥ &nbsp;Route performance</div>'
-                    '<div class="panel-sub">Recorded FCFS and optimized routes in the database</div>'
+                    '<div class="panel-sub">Latest recorded FCFS and optimized route pair</div>'
                     '<div style="text-align:right;font-size:10px;color:#71806F">'
                     '<span style="color:#A9C1A5">●</span> FCFS (Current)&nbsp;&nbsp;'
                     '<span style="color:#394C38">●</span> Optimized</div>', unsafe_allow_html=True)
@@ -91,7 +116,7 @@ with impact:
     with st.container(border=True):
         optimized_share = opt_co2 / fcfs_co2 * 100 if fcfs_co2 else 0
         st.markdown(f"""<div class="panel-title">🍃 &nbsp;Environmental impact</div>
-        <div class="panel-sub">CO₂ difference across recorded route types</div>
+        <div class="panel-sub">CO₂ difference for the latest optimization run</div>
         <div style="display:grid;place-items:center;padding:12px">
         <div style="width:138px;height:138px;border-radius:50%;display:grid;place-items:center;
         background:conic-gradient(#394C38 0 {optimized_share:.1f}%,#B8CEB3 {optimized_share:.1f}% 100%)">
@@ -100,7 +125,7 @@ with impact:
         <div class="callout"><strong>🍃 {co2_pct:.2f}% fewer CO₂ emissions</strong>
         <span>A cleaner, greener delivery network.</span></div>""", unsafe_allow_html=True)
 
-recent = query_df("""SELECT route_id,batch_id,vehicle_id,route_type,
+recent = query_df("""SELECT route_id,batch_id,vehicle_id,route_type,urgent_order_id,scenario,
     ROUND(distance_km,2) distance_km,ROUND(co2_kg,2) co2_kg,created_at
     FROM routes ORDER BY route_id DESC LIMIT 6""")
 with st.container(border=True):
@@ -112,7 +137,7 @@ with st.container(border=True):
         st.info("Chưa có route nào được lưu.")
     else:
         table = recent.rename(columns={"route_id":"Route ID","batch_id":"Batch","vehicle_id":"Vehicle",
-            "route_type":"Type","distance_km":"Distance (km)","co2_kg":"CO₂ (kg)","created_at":"Created"})
+            "route_type":"Type","urgent_order_id":"Urgent","scenario":"Scenario","distance_km":"Distance (km)","co2_kg":"CO₂ (kg)","created_at":"Created"})
         st.dataframe(table, hide_index=True, use_container_width=True, height=245)
 
 st.caption(f"Database routes: {int(routes_df.iloc[0]['total_routes'] or 0)} · "
