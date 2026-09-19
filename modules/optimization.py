@@ -176,23 +176,16 @@ def build_single_map(hub, orders, road_geometry, color_path, color_marker, urgen
                 stroked=True, get_line_color=[255, 255, 255, 255], line_width_min_pixels=1.5,
                 pickable=True
             ),
-            # Stop number is rendered directly on top of each delivery marker.
-            # The shadow layer keeps the number readable on the red/blue/purple pins.
-            pdk.Layer(
-                "TextLayer", id=f"customer-label-shadow-{color_path[0]}", data=marker_df,
-                get_position="[longitude, latitude]", get_text="label",
-                get_size=17, get_color=[20, 20, 20, 220],
-                get_pixel_offset=[1, 1],
-                get_text_anchor="middle", get_alignment_baseline="center",
-                font_weight="bold", billboard=True, pickable=False
-            ),
+            # Render the stop number as a large, high-contrast label.
+            # Keep it as a separate layer above the marker so the sequence is
+            # visible even when markers are close together.
             pdk.Layer(
                 "TextLayer", id=f"customer-labels-{color_path[0]}", data=marker_df,
                 get_position="[longitude, latitude]", get_text="label",
-                get_size=16, get_color=[255, 255, 255, 255],
-                get_pixel_offset=[0, 0],
+                get_size=22, get_color=[255, 255, 255, 255],
                 get_text_anchor="middle", get_alignment_baseline="center",
-                font_weight="bold", billboard=True, pickable=False
+                get_pixel_offset=[0, 0],
+                billboard=True, pickable=False,
             )
         ])
 
