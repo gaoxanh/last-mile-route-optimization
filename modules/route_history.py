@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
+import pydeck as pdk
 
 from database.connection import get_connection
+from services.routing.road_routing import RoutingError, get_road_route
 
 def ensure_route_columns():
     """Ensure existing SQLite files have the latest route metadata columns."""
@@ -268,34 +270,157 @@ else:
 # ROUTE MAP
 # -------------------------
 
-if {"latitude", "longitude"}.issubset(stops.columns):
-    map_df = stops[
-        ["latitude", "longitude"]
-    ].copy()
+def load_hub(batch_id):
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT h.latitude, h.longitude, h.name
+            FROM delivery_batches b
+            JOIN hubs h ON h.hub_id = b.hub_id
+            WHERE b.batch_id = ?
+            """,
+            (int(batch_id),),
+        ).fetchone()
+    return row
 
-    map_df["latitude"] = pd.to_numeric(
-        map_df["latitude"],
-        errors="coerce",
-    )
 
-    map_df["longitude"] = pd.to_numeric(
-        map_df["longitude"],
-        errors="coerce",
-    )
+def render_route_map(stops_df, batch_id):
+    hub = load_hub(batch_id)
+    if hub is None or stops_df.empty:
+        return
 
-    map_df = map_df.dropna()
+    points_df = stops_df.copy()
+    points_df["latitude"] = pd.to_numeric(points_df["latitude"], errors="coerce")
+    points_df["longitude"] = pd.to_numeric(points_df["longitude"], errors="coerce")
+    points_df = points_df.dropna(subset=["latitude", "longitude"]).copy()
 
-    if not map_df.empty:
-        st.divider()
-        st.markdown('<div class="panel-title">🗺️ &nbsp;Route map</div>'
-                    '<div class="panel-sub">Customer stop sequence for the selected route</div>',
-                    unsafe_allow_html=True)
-        st.map(
-            map_df,
-            latitude="latitude",
-            longitude="longitude",
-            size=35,
+    if points_df.empty:
+        return
+
+    hub_point = (float(hub["latitude"]), float(hub["longitude"]))
+    stop_points = list(zip(points_df["latitude"], points_df["longitude"]))
+    route_points = [hub_point] + stop_points + [hub_point]
+
+    try:
+        road = get_road_route(route_points)
+        path = [[float(lon), float(lat)] for lon, lat in road["geometry"]]
+        route_source = (
+            f'OSRM road geometry · {road["distance_km"]:.2f} km · '
+            f'{road["duration_min"]:.0f} min'
         )
+    except RoutingError:
+        path = [[lon, lat] for lat, lon in route_points]
+        route_source = "Road geometry unavailable · showing stop-to-stop fallback"
+
+    markers = []
+    for row in points_df.itertuples():
+        status = str(row.status or "PENDING").upper()
+        if status == "DELIVERED":
+            color = [54, 130, 85]
+        elif status in {"FAILED", "CANCELLED"}:
+            color = [205, 72, 72]
+        elif status == "IN_TRANSIT":
+            color = [70, 120, 205]
+        elif status == "ASSIGNED":
+            color = [155, 105, 205]
+        else:
+            color = [220, 165, 45]
+
+        markers.append({
+            "lat": float(row.latitude),
+            "lon": float(row.longitude),
+            "label": str(int(row.sequence)),
+            "order": str(row.order_id),
+            "status": status.replace("_", " ").title(),
+            "color": color,
+        })
+
+    hub_df = pd.DataFrame([{
+        "lat": hub_point[0],
+        "lon": hub_point[1],
+        "label": "H",
+        "name": hub["name"],
+    }])
+    marker_df = pd.DataFrame(markers)
+
+    layers = [
+        pdk.Layer(
+            "PathLayer",
+            data=pd.DataFrame([{"path": path}]),
+            get_path="path",
+            get_width=5,
+            get_color=[57, 76, 56],
+            width_min_pixels=3,
+        ),
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=marker_df,
+            get_position="[lon, lat]",
+            get_fill_color="color",
+            get_radius=90,
+            radius_min_pixels=7,
+            radius_max_pixels=13,
+            pickable=True,
+        ),
+        pdk.Layer(
+            "TextLayer",
+            data=marker_df,
+            get_position="[lon, lat]",
+            get_text="label",
+            get_color=[255, 255, 255],
+            get_size=12,
+            get_alignment_baseline="'center'",
+            get_text_anchor="'middle'",
+        ),
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=hub_df,
+            get_position="[lon, lat]",
+            get_fill_color=[239, 153, 48],
+            get_radius=125,
+            radius_min_pixels=10,
+            radius_max_pixels=16,
+            pickable=True,
+        ),
+        pdk.Layer(
+            "TextLayer",
+            data=hub_df,
+            get_position="[lon, lat]",
+            get_text="label",
+            get_color=[255, 255, 255],
+            get_size=13,
+            get_alignment_baseline="'center'",
+            get_text_anchor="'middle'",
+        ),
+    ]
+
+    midpoint = route_points[len(route_points) // 2]
+    deck = pdk.Deck(
+        layers=layers,
+        initial_view_state=pdk.ViewState(
+            latitude=float(midpoint[0]),
+            longitude=float(midpoint[1]),
+            zoom=11.5,
+            pitch=0,
+        ),
+        tooltip={
+            "html": "<b>Stop {label}</b><br/>Order: {order}<br/>Status: {status}",
+            "style": {"backgroundColor": "#263425", "color": "white"},
+        },
+    )
+
+    st.divider()
+    st.markdown(
+        '<div class="panel-title">🗺️ &nbsp;Delivery route map</div>'
+        f'<div class="panel-sub">H = hub · numbered markers follow the delivery sequence · '
+        f'{route_source}</div>',
+        unsafe_allow_html=True,
+    )
+    st.pydeck_chart(deck, use_container_width=True)
+
+
+if {"latitude", "longitude"}.issubset(stops.columns):
+    render_route_map(stops, int(route["batch_id"]))
 
 
 # -------------------------
