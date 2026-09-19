@@ -70,8 +70,8 @@ if routes.empty:
 # ROUTE FILTER
 # -------------------------
 
-st.markdown('<div class="panel-title">🚚 &nbsp;Recorded delivery routes</div>'
-            '<div class="panel-sub">Select a delivery route to inspect its batch, route plan, stop sequence and delivery status</div>',
+st.markdown('<div class="panel-title">🚚 &nbsp;Delivery route records</div>'
+            '<div class="panel-sub">Follow the delivery sequence, stop status and route performance for recorded delivery runs</div>',
             unsafe_allow_html=True)
 
 c1, c2 = st.columns(2)
@@ -81,9 +81,12 @@ with c1:
         routes["route_type"].dropna().astype(str).unique().tolist()
     )
 
+    default_type = "OPTIMIZED" if "OPTIMIZED" in route_types else route_types[0]
     selected_type = st.selectbox(
-        "Route Type",
+        "Route plan",
         route_types,
+        index=route_types.index(default_type),
+        help="Optimized is the operational delivery plan. FCFS is kept as a baseline reference.",
     )
 
 with c2:
@@ -115,8 +118,8 @@ if filtered.empty:
 
 
 route_labels = {
-    f"Route #{int(row.route_id)} · Batch {int(row.batch_id)} · "
-    f"{row.route_type} · {row.created_at}": int(row.route_id)
+    f"Delivery run · Batch {int(row.batch_id)} · "
+    f"{row.created_at[:10]} · {row.route_type}": int(row.route_id)
     for row in filtered.itertuples()
 }
 
@@ -133,40 +136,56 @@ route = filtered[
 
 st.divider()
 
-
 # -------------------------
-# ROUTE KPI
+# DELIVERY RUN SUMMARY
 # -------------------------
 
-k1, k2, k3, k4 = st.columns(4)
-
-k1.metric(
-    "Route",
-    f"#{int(route['route_id'])}",
-)
-
-
-k2.metric(
-    "Distance",
-    f"{float(route['distance_km']):.2f} km",
-)
-
-k3.metric(
-    "CO₂",
-    f"{float(route['co2_kg']):.2f} kg",
-)
 stops = load_stops(selected_route_id)
 
+total_stops = len(stops)
+if total_stops:
+    status_series = stops["status"].fillna("PENDING").astype(str).str.upper()
+    delivered_count = int((status_series == "DELIVERED").sum())
+    pending_count = int((status_series == "PENDING").sum())
+else:
+    delivered_count = pending_count = 0
 
-k4.metric(
-    "Stops",
-    f"{len(stops):,}",
+progress = delivered_count / total_stops if total_stops else 0
+
+st.markdown(
+    f'<div class="panel-title">🚚 &nbsp;Delivery run · Batch {int(route["batch_id"])}</div>'
+    f'<div class="panel-sub">Vehicle {int(route["vehicle_id"])} · '
+    f'{route["created_at"]} · {total_stops} recorded stops</div>',
+    unsafe_allow_html=True,
+)
+
+k1, k2, k3, k4 = st.columns(4)
+k1.metric("Stops", f"{total_stops}")
+k2.metric("Delivered", f"{delivered_count}")
+k3.metric("Pending", f"{pending_count}")
+k4.metric("Distance", f"{float(route['distance_km']):.2f} km")
+
+st.progress(
+    progress,
+    text=f"Delivery progress · {delivered_count}/{total_stops} stops delivered"
+    if total_stops else "No recorded stops",
 )
 
 st.caption(
-    f"Batch {int(route['batch_id'])} · Vehicle {int(route['vehicle_id'])} · "
-    f"Route plan: **{route['route_type']}** · Recorded: {route['created_at']}"
+    f"Route plan: **{route['route_type']}** · CO₂ {float(route['co2_kg']):.2f} kg · "
+    f"Urgent {route['urgent_order_id'] or '—'} · Scenario {route['scenario'] or 'Normal'}"
 )
+
+if pending_count:
+    pending_rows = stops[
+        stops["status"].fillna("PENDING").astype(str).str.upper() == "PENDING"
+    ]
+    if not pending_rows.empty:
+        next_stop = pending_rows.iloc[0]
+        st.info(
+            f"📍 Next pending stop: **#{int(next_stop['sequence'])} · "
+            f"Order {next_stop['order_id']}**"
+        )
 
 
 # -------------------------
@@ -175,7 +194,7 @@ st.caption(
 
 st.divider()
 st.markdown('<div class="panel-title">🧭 &nbsp;Delivery sequence</div>'
-            '<div class="panel-sub">Stop order and road distance from the previous delivery point</div>',
+            '<div class="panel-sub">Recorded stop order, delivery status and distance from the previous stop</div>',
             unsafe_allow_html=True)
 
 if stops.empty:
@@ -257,7 +276,9 @@ if {"latitude", "longitude"}.issubset(stops.columns):
 # -------------------------
 
 st.divider()
-st.markdown('<div class="section-label">Route details</div>', unsafe_allow_html=True)
+st.markdown('<div class="panel-title">ℹ️ &nbsp;Delivery run details</div>'
+            '<div class="panel-sub">Operational metadata for the selected recorded route</div>',
+            unsafe_allow_html=True)
 
 details = pd.DataFrame({
     "Field": [
