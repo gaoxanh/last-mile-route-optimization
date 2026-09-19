@@ -242,17 +242,23 @@ if not filtered.empty:
     )
 
     if st.button("Update order status", type="primary"):
-        with get_connection() as conn:
-            conn.execute(
-                "UPDATE orders SET status = ? WHERE order_id = ?",
-                (new_status, int(current_row["order_id"])),
+        try:
+            with st.spinner("Updating order status..."):
+                with get_connection() as conn:
+                    conn.execute(
+                        "UPDATE orders SET status = ? WHERE order_id = ?",
+                        (new_status, int(current_row["order_id"])),
+                    )
+                    conn.commit()
+            st.success(
+                f"Order {selected_order} updated to "
+                f"{new_status.replace('_', ' ').title()}."
             )
-            conn.commit()
-        st.success(
-            f"Order {selected_order} updated to "
-            f"{new_status.replace('_', ' ').title()}."
-        )
-        st.rerun()
+            st.rerun()
+        except Exception as exc:
+            st.error("Order status could not be updated. Please retry.")
+            with st.expander("Technical details"):
+                st.code(str(exc))
 
 
 # -------------------------
