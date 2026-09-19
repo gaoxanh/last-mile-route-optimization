@@ -464,34 +464,91 @@ if "optimization_result" in st.session_state:
 
     st.divider()
 
-    st.subheader("📊 So sánh hiệu quả tuyến")
-    chart_df = pd.DataFrame({
-        "Phương án vận hành": ["FCFS Baseline", "Thuật toán Tối ưu"],
-        "Tổng khoảng cách di chuyển (km)": [result["fcfs_distance"], result["optimized_distance"]],
-        "Lượng khí thải CO₂ xả thải (kg)": [result["fcfs_co2"], result["optimized_co2"]]
-    })
-    
+    st.markdown(
+        '<div class="panel-title">📊 &nbsp;Kết quả tối ưu</div>'
+        '<div class="panel-sub">Gộp các chỉ số chính và so sánh trực tiếp FCFS với 2-Opt</div>',
+        unsafe_allow_html=True,
+    )
 
-    col_c1, col_c2 = st.columns(2)
-    
-    with col_c1:
-        # Biểu đồ 1: Tổng khoảng cách di chuyển
-        chart1 = alt.Chart(chart_df).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
-            x=alt.X("Phương án vận hành:N", axis=alt.Axis(labelAngle=0, title=None)), # Khóa góc chữ quay về 0 độ (Nằm ngang)
-            y=alt.Y("Tổng khoảng cách di chuyển (km):Q"),
-            color=alt.value("#1E3A8A")
-        ).properties(height=320)
-        st.altair_chart(chart1, use_container_width=True)
+    fcfs_km = float(result["fcfs_distance"])
+    opt_km = float(result["optimized_distance"])
+    fcfs_co2 = float(result["fcfs_co2"])
+    opt_co2 = float(result["optimized_co2"])
+    fcfs_time = float(result.get("fcfs_duration_min", 0))
+    opt_time = float(result.get("duration_min", 0))
 
-    with col_c2:
-        # Biểu đồ 2: Lượng khí thải CO2 xả thải
-        chart2 = alt.Chart(chart_df).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
-            x=alt.X("Phương án vận hành:N", axis=alt.Axis(labelAngle=0, title=None)), # Khóa góc chữ quay về 0 độ (Nằm ngang)
-            y=alt.Y("Lượng khí thải CO₂ xả thải (kg):Q"),
-            color=alt.value("#DC2626")
-        ).properties(height=320)
-        st.altair_chart(chart2, use_container_width=True)
+    distance_saved = fcfs_km - opt_km
+    co2_saved = fcfs_co2 - opt_co2
+    time_saved = fcfs_time - opt_time
 
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Quãng đường tối ưu", f"{opt_km:.2f} km", f"-{distance_saved:.2f} km")
+    k2.metric("CO₂ sau tối ưu", f"{opt_co2:.2f} kg", f"-{co2_saved:.2f} kg")
+    k3.metric("Thời gian di chuyển", f"{opt_time:.0f} min", f"-{time_saved:.0f} min")
+    k4.metric("Đơn hàng", f"{len(fcfs_orders)}", "Đã tối ưu")
+
+    with st.container(border=True):
+        c1, c2 = st.columns(2)
+
+        distance_df = pd.DataFrame({
+            "Phương án": ["FCFS", "2-Opt"],
+            "Quãng đường (km)": [fcfs_km, opt_km],
+        })
+        distance_chart = (
+            alt.Chart(distance_df)
+            .mark_bar(cornerRadius=6, size=52)
+            .encode(
+                y=alt.Y("Phương án:N", sort=["FCFS", "2-Opt"], title=None),
+                x=alt.X("Quãng đường (km):Q", title="km"),
+                color=alt.Color(
+                    "Phương án:N",
+                    scale=alt.Scale(
+                        domain=["FCFS", "2-Opt"],
+                        range=["#24479A", "#3D6B45"],
+                    ),
+                    legend=None,
+                ),
+                tooltip=[
+                    alt.Tooltip("Phương án:N"),
+                    alt.Tooltip("Quãng đường (km):Q", format=".2f"),
+                ],
+            )
+            .properties(height=190, title="Quãng đường di chuyển")
+        )
+
+        co2_df = pd.DataFrame({
+            "Phương án": ["FCFS", "2-Opt"],
+            "CO₂ (kg)": [fcfs_co2, opt_co2],
+        })
+        co2_chart = (
+            alt.Chart(co2_df)
+            .mark_bar(cornerRadius=6, size=52)
+            .encode(
+                y=alt.Y("Phương án:N", sort=["FCFS", "2-Opt"], title=None),
+                x=alt.X("CO₂ (kg):Q", title="kg"),
+                color=alt.Color(
+                    "Phương án:N",
+                    scale=alt.Scale(
+                        domain=["FCFS", "2-Opt"],
+                        range=["#24479A", "#3D6B45"],
+                    ),
+                    legend=None,
+                ),
+                tooltip=[
+                    alt.Tooltip("Phương án:N"),
+                    alt.Tooltip("CO₂ (kg):Q", format=".2f"),
+                ],
+            )
+            .properties(height=190, title="Khí thải CO₂")
+        )
+
+        c1.altair_chart(distance_chart, use_container_width=True)
+        c2.altair_chart(co2_chart, use_container_width=True)
+
+    st.caption(
+        f"Tiết kiệm so với FCFS: {distance_saved:.2f} km · "
+        f"{co2_saved:.2f} kg CO₂ · {time_saved:.0f} phút"
+    )
 
     st.divider()
 
