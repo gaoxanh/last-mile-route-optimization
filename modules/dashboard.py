@@ -16,12 +16,25 @@ orders_df = query_df("""SELECT COUNT(*) total_orders,
     SUM(CASE WHEN status='PENDING' THEN 1 ELSE 0 END) pending_orders FROM orders""")
 routes_df = query_df("""SELECT COUNT(*) total_routes,
     COALESCE(SUM(distance_km),0) total_km, COALESCE(SUM(co2_kg),0) total_co2 FROM routes""")
-compare = query_df("""SELECT
-    COALESCE(SUM(CASE WHEN route_type='FCFS' THEN distance_km ELSE 0 END),0) fcfs_km,
-    COALESCE(SUM(CASE WHEN route_type='OPTIMIZED' THEN distance_km ELSE 0 END),0) optimized_km,
-    COALESCE(SUM(CASE WHEN route_type='FCFS' THEN co2_kg ELSE 0 END),0) fcfs_co2,
-    COALESCE(SUM(CASE WHEN route_type='OPTIMIZED' THEN co2_kg ELSE 0 END),0) optimized_co2
-    FROM routes""")
+compare = query_df("""
+    SELECT
+        COALESCE(SUM(CASE WHEN r.route_type='FCFS' THEN r.distance_km ELSE 0 END),0) fcfs_km,
+        COALESCE(SUM(CASE WHEN r.route_type='OPTIMIZED' THEN r.distance_km ELSE 0 END),0) optimized_km,
+        COALESCE(SUM(CASE WHEN r.route_type='FCFS' THEN r.co2_kg ELSE 0 END),0) fcfs_co2,
+        COALESCE(SUM(CASE WHEN r.route_type='OPTIMIZED' THEN r.co2_kg ELSE 0 END),0) optimized_co2
+    FROM routes r
+    WHERE r.route_id IN (
+        SELECT MAX(f.route_id)
+        FROM routes f
+        JOIN routes o
+          ON o.batch_id = f.batch_id
+         AND o.route_type = 'OPTIMIZED'
+         AND f.route_type = 'FCFS'
+         AND f.route_id < o.route_id
+        WHERE o.route_id = (SELECT MAX(route_id) FROM routes WHERE route_type='OPTIMIZED')
+    )
+       OR r.route_id = (SELECT MAX(route_id) FROM routes WHERE route_type='OPTIMIZED')
+""")
 
 total = int(orders_df.iloc[0]["total_orders"] or 0)
 pending = int(orders_df.iloc[0]["pending_orders"] or 0)
