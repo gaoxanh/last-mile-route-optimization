@@ -3,6 +3,31 @@ import pandas as pd
 
 from database.connection import get_connection
 
+def ensure_route_columns():
+    """Ensure existing SQLite files have the latest route metadata columns."""
+    with get_connection() as conn:
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(routes)").fetchall()
+        }
+        if "duration_min" not in columns:
+            conn.execute(
+                "ALTER TABLE routes ADD COLUMN duration_min REAL DEFAULT 0.0"
+            )
+        if "urgent_order_id" not in columns:
+            conn.execute(
+                "ALTER TABLE routes ADD COLUMN urgent_order_id TEXT"
+            )
+        if "scenario" not in columns:
+            conn.execute(
+                "ALTER TABLE routes ADD COLUMN scenario TEXT DEFAULT 'Normal'"
+            )
+        conn.commit()
+
+
+ensure_route_columns()
+
+
 def load_routes():
     with get_connection() as conn:
         return pd.read_sql_query(
