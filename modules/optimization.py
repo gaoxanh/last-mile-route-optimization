@@ -1,6 +1,4 @@
 from pathlib import Path
-import base64 as _base64
-
 import pandas as pd
 import streamlit as st
 import altair as alt
@@ -124,7 +122,7 @@ def _calculate_zoom(points):
     return 8
 
 def _build_marker_dataframe(route_orders, urgent_order_id, color_theme):
-    """Tạo Marker điểm dừng đồng bộ tọa độ chuẩn hóa."""
+    """Create numbered route markers using the same TextLayer pattern as Route History."""
     rows = []
     for sequence, row in enumerate(route_orders, start=1):
         order_id = str(row["order_id"])
@@ -140,23 +138,6 @@ def _build_marker_dataframe(route_orders, urgent_order_id, color_theme):
             "urgent": "Có (Khẩn cấp)" if is_urgent else "Không",
             "color": color,
         })
-
-        # Build the marker itself as SVG so the sequence number is baked
-        # into the pin. This avoids browser/font rendering issues with TextLayer.
-        marker_color = "#{:02x}{:02x}{:02x}".format(*color[:3])
-        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72">
-          <circle cx="36" cy="32" r="25" fill="{marker_color}" stroke="white" stroke-width="3"/>
-          <text x="36" y="39" text-anchor="middle" font-family="Arial,sans-serif"
-                font-size="22" font-weight="700" fill="white">{sequence}</text>
-          <path d="M24 51 L36 68 L48 51 Z" fill="{marker_color}"/>
-        </svg>"""
-        icon_url = "data:image/svg+xml;base64," + _base64.b64encode(svg.encode()).decode()
-        rows[-1]["icon_data"] = {
-            "url": icon_url,
-            "width": 72,
-            "height": 72,
-            "anchorY": 68,
-        }
     return pd.DataFrame(rows)
 
 def build_single_map(hub, orders, road_geometry, color_path, color_marker, urgent_id, disruption=None, hazards=None, old_geometry=None):
@@ -209,8 +190,8 @@ def build_single_map(hub, orders, road_geometry, color_path, color_marker, urgen
                 get_text="label",
                 get_size=18,
                 get_color=[255, 255, 255, 255],
-                get_text_anchor="middle",
-                get_alignment_baseline="center",
+                get_text_anchor="'middle'",
+                get_alignment_baseline="'center'",
                 pickable=False,
             ),
         ])
