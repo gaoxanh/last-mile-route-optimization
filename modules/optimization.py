@@ -10,18 +10,8 @@ except ImportError:  # pragma: no cover - optional dependency for map rendering
     pdk = None
 
 from database.connection import get_connection
-from services.emission import (
-    DEFAULT_MOTORCYCLE_EMISSION_FACTOR,
-    calculate_co2,
-    calculate_reduction_percent,
-)
 from services.fcfs import build_fcfs_route
 from services.orchestrator import LastMileRoutingService
-from services.routing import road_routing
-from services.routing.bottleneck import Bottleneck, apply_penalties, reroute_remaining
-from services.routing.distance_matrix import build_distance_matrix
-from services.routing.leg_distance import build_leg_distances
-from services.routing.two_opt import route_cost, two_opt
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CSV_PATH = PROJECT_ROOT / "data" / "sample_orders.csv"
