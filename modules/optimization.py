@@ -353,10 +353,13 @@ if run_btn:
         urgent_index = fcfs_orders.index.get_loc(urgent_position) + 1
 
         service = LastMileRoutingService(stops)
-        result = service.run(
-            urgent_index=urgent_index,
-            scenario=scenario,
-        )
+        with st.spinner(
+            f"Calculating OSRM road matrix, optimizing the route and simulating {scenario}..."
+        ):
+            result = service.run(
+                urgent_index=urgent_index,
+                scenario=scenario,
+            )
 
         def records_from_route(route_indices):
             return [
@@ -401,8 +404,12 @@ if run_btn:
         )
 
     except Exception as exc:
-        st.error(f"Không thể thực thi tối ưu hóa: {exc}")
-        st.exception(exc)
+        st.error(
+            "Optimization could not be completed. "
+            "The routing service may be temporarily unavailable; please retry."
+        )
+        with st.expander("Technical details"):
+            st.code(str(exc))
 
 # --- DISPLAY ---
 if "optimization_result" in st.session_state:
