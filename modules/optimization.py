@@ -182,22 +182,36 @@ def build_single_map(hub, orders, road_geometry, color_path, color_marker, urgen
         get_path="path", get_color=color_path, width_min_pixels=5, width_max_pixels=8, pickable=False
     ))
     
-    # 2. Markers điểm dừng & Số STT hiển thị to rõ
+    # 2. Delivery markers + visible stop numbers
     marker_df = _build_marker_dataframe(orders, urgent_id, color_marker)
     if not marker_df.empty:
         layers.extend([
             pdk.Layer(
-                "IconLayer",
+                "ScatterplotLayer",
                 id=f"customer-pins-{color_path[0]}",
                 data=marker_df,
-                get_icon="icon_data",
                 get_position="[longitude, latitude]",
-                get_size=28,
-                size_scale=1,
-                size_min_pixels=28,
-                size_max_pixels=32,
+                get_fill_color="color",
+                get_radius=95,
+                radius_min_pixels=15,
+                radius_max_pixels=22,
+                stroked=True,
+                get_line_color=[255, 255, 255, 255],
+                line_width_min_pixels=2,
                 pickable=True,
-            )
+            ),
+            pdk.Layer(
+                "TextLayer",
+                id=f"customer-sequence-{color_path[0]}",
+                data=marker_df,
+                get_position="[longitude, latitude]",
+                get_text="label",
+                get_size=18,
+                get_color=[255, 255, 255, 255],
+                get_text_anchor="middle",
+                get_alignment_baseline="center",
+                pickable=False,
+            ),
         ])
 
     # 3. Hub Kho hàng ★
