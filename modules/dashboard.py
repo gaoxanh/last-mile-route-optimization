@@ -122,9 +122,6 @@ with performance:
                     '<span style="color:#394C38">●</span> Optimized</div>', unsafe_allow_html=True)
         st.markdown(bars("Total distance", fcfs_km, opt_km), unsafe_allow_html=True)
         st.markdown(bars("CO₂ emissions", fcfs_co2, opt_co2), unsafe_allow_html=True)
-fcfs_duration = float(compare.iloc[0]["fcfs_duration_min"] or 0) if not compare.empty else 0
-opt_duration = float(compare.iloc[0]["optimized_duration_min"] or 0) if not compare.empty else 0
-
 with impact:
     with st.container(border=True):
         optimized_share = opt_co2 / fcfs_co2 * 100 if fcfs_co2 else 0
@@ -138,20 +135,75 @@ with impact:
         <div class="callout"><strong>🍃 {co2_pct:.2f}% fewer CO₂ emissions</strong>
         <span>A cleaner, greener delivery network.</span></div>""", unsafe_allow_html=True)
 
-recent = query_df("""SELECT route_id,batch_id,vehicle_id,route_type,urgent_order_id,scenario,
-    ROUND(distance_km,2) distance_km,ROUND(duration_min,0) duration_min,ROUND(co2_kg,2) co2_kg,created_at
-    FROM routes ORDER BY route_id DESC LIMIT 6""")
+recent = query_df("""
+    SELECT
+        o.route_id AS optimized_route_id,
+        f.route_id AS fcfs_route_id,
+        o.batch_id,
+        o.vehicle_id,
+        o.urgent_order_id,
+        o.scenario,
+        ROUND(f.distance_km, 2) AS fcfs_km,
+        ROUND(o.distance_km, 2) AS optimized_km,
+        ROUND(o.duration_min, 0) AS duration_min,
+        ROUND(f.distance_km - o.distance_km, 2) AS saved_km,
+        ROUND(
+            CASE WHEN f.distance_km > 0
+                 THEN (f.distance_km - o.distance_km) * 100.0 / f.distance_km
+                 ELSE 0 END, 1
+        ) AS saved_pct,
+        ROUND(o.co2_kg, 2) AS co2_kg,
+        o.created_at
+    FROM routes o
+    JOIN routes f
+      ON f.route_id = (
+          SELECT MAX(f2.route_id)
+          FROM routes f2
+          WHERE f2.route_type = 'FCFS'
+            AND f2.batch_id = o.batch_id
+            AND f2.route_id < o.route_id
+      )
+    WHERE o.route_type = 'OPTIMIZED'
+    ORDER BY o.route_id DESC
+    LIMIT 6
+""")
 with st.container(border=True):
     title, link = st.columns([5, 1])
     title.markdown('<div class="panel-title">🚚 &nbsp;Recent routes</div>'
-                   '<div class="panel-sub">Latest route records stored in the database</div>', unsafe_allow_html=True)
+                   '<div class="panel-sub">Latest delivery runs · FCFS vs optimized plan</div>', unsafe_allow_html=True)
     link.page_link("modules/route_history.py", label="View all routes →", use_container_width=True)
     if recent.empty:
         st.info("Chưa có route nào được lưu.")
     else:
-        table = recent.rename(columns={"route_id":"Route ID","batch_id":"Batch","vehicle_id":"Vehicle",
-            "route_type":"Type","urgent_order_id":"Urgent","scenario":"Scenario","distance_km":"Distance (km)","duration_min":"Duration (min)","co2_kg":"CO₂ (kg)","created_at":"Created"})
-        st.dataframe(table, hide_index=True, use_container_width=True, height=245)
+        table = recent.rename(columns={
+            "optimized_route_id": "Run",
+            "batch_id": "Batch",
+            "vehicle_id": "Vehicle",
+            "urgent_order_id": "Urgent",
+            "scenario": "Scenario",
+            "fcfs_km": "FCFS (km)",
+            "optimized_km": "Optimized (km)",
+            "saved_km": "Saved (km)",
+            "saved_pct": "Saved (%)",
+            "duration_min": "Duration (min)",
+            "co2_kg": "CO₂ (kg)",
+            "created_at": "Created",
+        })
+        table["Run"] = table["Run"].map(lambda value: f"#{int(value)}")
+        st.dataframe(
+            table,
+            hide_index=True,
+            use_container_width=True,
+            height=245,
+            column_config={
+                "Saved (%)": st.column_config.NumberColumn("Saved (%)", format="%.1f%%"),
+                "FCFS (km)": st.column_config.NumberColumn("FCFS (km)", format="%.2f"),
+                "Optimized (km)": st.column_config.NumberColumn("Optimized (km)", format="%.2f"),
+                "Saved (km)": st.column_config.NumberColumn("Saved (km)", format="%.2f"),
+                "Duration (min)": st.column_config.NumberColumn("Duration (min)", format="%.0f"),
+                "CO₂ (kg)": st.column_config.NumberColumn("CO₂ (kg)", format="%.2f"),
+            },
+        )
 
 st.caption(
     f"Database: {int(routes_df.iloc[0]['total_routes'] or 0)} route records · "
