@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS routes (
     route_type TEXT NOT NULL CHECK (route_type IN ('FCFS', 'OPTIMIZED')),
     distance_km REAL DEFAULT 0.0,
     co2_kg REAL DEFAULT 0.0,
+    urgent_order_id TEXT,
+    scenario TEXT DEFAULT 'Normal',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (batch_id) REFERENCES delivery_batches(batch_id) ON DELETE CASCADE,
     FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id) ON DELETE RESTRICT
