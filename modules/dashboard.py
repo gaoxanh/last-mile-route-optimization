@@ -118,11 +118,12 @@ with performance:
                     '<span style="color:#394C38">●</span> Optimized</div>', unsafe_allow_html=True)
         st.markdown(bars("Total distance", fcfs_km, opt_km), unsafe_allow_html=True)
         st.markdown(bars("CO₂ emissions", fcfs_co2, opt_co2), unsafe_allow_html=True)
+fcfs_duration = float(compare.iloc[0]["fcfs_duration_min"] or 0) if not compare.empty else 0
+opt_duration = float(compare.iloc[0]["optimized_duration_min"] or 0) if not compare.empty else 0
+
 with impact:
     with st.container(border=True):
         optimized_share = opt_co2 / fcfs_co2 * 100 if fcfs_co2 else 0
-fcfs_duration = float(compare.iloc[0]["fcfs_duration_min"] or 0) if not compare.empty else 0
-opt_duration = float(compare.iloc[0]["optimized_duration_min"] or 0) if not compare.empty else 0
         st.markdown(f"""<div class="panel-title">🍃 &nbsp;Environmental impact</div>
         <div class="panel-sub">CO₂ difference for the latest optimization run</div>
         <div style="display:grid;place-items:center;padding:12px">
