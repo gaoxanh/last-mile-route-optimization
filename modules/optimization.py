@@ -139,6 +139,23 @@ def _build_marker_dataframe(route_orders, urgent_order_id, color_theme):
             "urgent": "Có (Khẩn cấp)" if is_urgent else "Không",
             "color": color,
         })
+
+        # Build the marker itself as SVG so the sequence number is baked
+        # into the pin. This avoids browser/font rendering issues with TextLayer.
+        marker_color = "#{:02x}{:02x}{:02x}".format(*color[:3])
+        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72">
+          <circle cx="36" cy="32" r="25" fill="{marker_color}" stroke="white" stroke-width="3"/>
+          <text x="36" y="39" text-anchor="middle" font-family="Arial,sans-serif"
+                font-size="22" font-weight="700" fill="white">{sequence}</text>
+          <path d="M24 51 L36 68 L48 51 Z" fill="{marker_color}"/>
+        </svg>"""
+        icon_url = "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
+        rows[-1]["icon_data"] = {
+            "url": icon_url,
+            "width": 72,
+            "height": 72,
+            "anchorY": 68,
+        }
     return pd.DataFrame(rows)
 
 def build_single_map(hub, orders, road_geometry, color_path, color_marker, urgent_id, disruption=None, hazards=None, old_geometry=None):
@@ -170,26 +187,16 @@ def build_single_map(hub, orders, road_geometry, color_path, color_marker, urgen
     if not marker_df.empty:
         layers.extend([
             pdk.Layer(
-                "ScatterplotLayer", id=f"customer-pins-{color_path[0]}", data=marker_df,
-                get_position="[longitude, latitude]", get_fill_color="color",
-                get_radius=100, radius_min_pixels=14, radius_max_pixels=24,
-                stroked=True, get_line_color=[255, 255, 255, 255], line_width_min_pixels=1.5,
-                pickable=True
-            ),
-            # Render the stop number as a large, high-contrast label.
-            # Keep it as a separate layer above the marker so the sequence is
-            # visible even when markers are close together.
-            pdk.Layer(
-                "TextLayer", id=f"customer-labels-{color_path[0]}", data=marker_df,
+                "IconLayer",
+                id=f"customer-pins-{color_path[0]}",
+                data=marker_df,
+                get_icon="icon_data",
                 get_position="[longitude, latitude]",
-                get_text="sequence",
-                get_size=20,
-                get_color=[255, 255, 255, 255],
-                get_text_anchor="middle",
-                get_alignment_baseline="center",
-                billboard=True,
-                font_weight=700,
-                pickable=False,
+                get_size=28,
+                size_scale=1,
+                size_min_pixels=28,
+                size_max_pixels=32,
+                pickable=True,
             )
         ])
 
