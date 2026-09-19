@@ -47,10 +47,10 @@ compare = query_df("""
 
 total = int(orders_df.iloc[0]["total_orders"] or 0)
 pending = int(orders_df.iloc[0]["pending_orders"] or 0)
-fcfs_km = float(compare.iloc[0]["fcfs_km"] or 0)
-opt_km = float(compare.iloc[0]["optimized_km"] or 0)
-fcfs_co2 = float(compare.iloc[0]["fcfs_co2"] or 0)
-opt_co2 = float(compare.iloc[0]["optimized_co2"] or 0)
+fcfs_km = float(compare.iloc[0]["fcfs_km"] or 0) if not compare.empty else 0.0
+opt_km = float(compare.iloc[0]["optimized_km"] or 0) if not compare.empty else 0.0
+fcfs_co2 = float(compare.iloc[0]["fcfs_co2"] or 0) if not compare.empty else 0.0
+opt_co2 = float(compare.iloc[0]["optimized_co2"] or 0) if not compare.empty else 0.0
 saved_km = max(0.0, fcfs_km - opt_km)
 saved_co2 = max(0.0, fcfs_co2 - opt_co2)
 km_pct = saved_km / fcfs_km * 100 if fcfs_km else 0
@@ -207,6 +207,6 @@ with st.container(border=True):
 
 st.caption(
     f"Database: {int(routes_df.iloc[0]['total_routes'] or 0)} route records · "
-    f"Total saved CO₂: {float(routes_df.iloc[0]['total_co2'] or 0):.2f} kg. "
-    f"Recorded distance is kept in Route History by individual run."
+    f"Total saved CO₂ across recorded route plans: {float(routes_df.iloc[0]['total_co2'] or 0):.2f} kg. "
+    f"Use Route History to inspect each delivery run."
 )
