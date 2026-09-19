@@ -53,8 +53,8 @@ def load_stops(route_id):
 routes = load_routes()
 
 st.markdown(
-    '<div class="page-heading"><h1>Route history</h1>'
-    '<p>Inspect recorded routes, delivery sequence and route-level performance</p></div>',
+    '<div class="page-heading"><h1>Delivery route history</h1>'
+    '<p>Track recorded delivery routes, stop sequence and route progress</p></div>',
     unsafe_allow_html=True,
 )
 
@@ -70,8 +70,8 @@ if routes.empty:
 # ROUTE FILTER
 # -------------------------
 
-st.markdown('<div class="panel-title">🗂️ &nbsp;Optimization runs</div>'
-            '<div class="panel-sub">Review saved FCFS and optimized routes, including the urgent order and disruption scenario</div>',
+st.markdown('<div class="panel-title">🚚 &nbsp;Recorded delivery routes</div>'
+            '<div class="panel-sub">Select a delivery route to inspect its batch, route plan, stop sequence and delivery status</div>',
             unsafe_allow_html=True)
 
 c1, c2 = st.columns(2)
@@ -115,8 +115,8 @@ if filtered.empty:
 
 
 route_labels = {
-    f"Route {int(row.route_id)} · {row.route_type} · "
-    f"Batch {int(row.batch_id)} · Urgent {row.urgent_order_id or '—'} · {row.scenario or 'Normal'}": int(row.route_id)
+    f"Route #{int(row.route_id)} · Batch {int(row.batch_id)} · "
+    f"{row.route_type} · {row.created_at}": int(row.route_id)
     for row in filtered.itertuples()
 }
 
@@ -164,9 +164,8 @@ k4.metric(
 )
 
 st.caption(
-    f"**{route['route_type']}** · Batch {int(route['batch_id'])} · "
-    f"Vehicle {int(route['vehicle_id'])} · Urgent {route['urgent_order_id'] or '—'} · "
-    f"Scenario: {route['scenario'] or 'Normal'}"
+    f"Batch {int(route['batch_id'])} · Vehicle {int(route['vehicle_id'])} · "
+    f"Route plan: **{route['route_type']}** · Recorded: {route['created_at']}"
 )
 
 
@@ -269,6 +268,8 @@ details = pd.DataFrame({
         "Total Distance",
         "Total CO₂",
         "Number of Stops",
+        "Urgent Order",
+        "Scenario",
         "Created At",
     ],
     "Value": [
@@ -279,6 +280,8 @@ details = pd.DataFrame({
         f"{float(route['distance_km']):.2f} km",
         f"{float(route['co2_kg']):.2f} kg",
         len(stops),
+        route["urgent_order_id"] or "—",
+        route["scenario"] or "Normal",
         route["created_at"],
     ],
 })
