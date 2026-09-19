@@ -34,6 +34,74 @@ def get_batches():
             """
         ).fetchall()
 
+def save_demo_routes_to_db(result, fcfs_orders, batch_id, vehicle_id):
+    """Persist the current CSV demo result so Dashboard/Route History share the same run."""
+    with get_connection() as conn:
+        db_orders = conn.execute(
+            """
+            SELECT o.order_id, c.latitude, c.longitude
+            FROM orders o
+            JOIN customers c ON c.customer_id = o.customer_id
+            WHERE o.batch_id = ?
+            """,
+            (int(batch_id),),
+        ).fetchall()
+
+        order_lookup = {
+            (round(float(row["latitude"]), 6), round(float(row["longitude"]), 6)): int(row["order_id"])
+            for row in db_orders
+        }
+
+        def db_order_id(csv_row):
+            key = (round(float(csv_row["latitude"]), 6), round(float(csv_row["longitude"]), 6))
+            if key not in order_lookup:
+                raise ValueError(
+                    f"Không map được đơn {csv_row['order_id']} từ CSV sang order_id trong DB."
+                )
+            return order_lookup[key]
+
+        def insert_route(route_type, route_indices, road):
+            cur = conn.execute(
+                """
+                INSERT INTO routes(batch_id, vehicle_id, route_type, distance_km, co2_kg)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    int(batch_id),
+                    int(vehicle_id),
+                    route_type,
+                    float(road["distance_km"]),
+                    float(road["distance_km"]) * 0.06,
+                ),
+            )
+            route_id = cur.lastrowid
+            legs = road.get("legs", [])
+
+            for sequence, stop_index in enumerate(route_indices[1:-1], start=1):
+                csv_row = fcfs_orders.iloc[stop_index - 1]
+                distance = (
+                    float(legs[sequence - 1]["distance_km"])
+                    if sequence - 1 < len(legs)
+                    else 0.0
+                )
+                conn.execute(
+                    """
+                    INSERT INTO route_stops(
+                        route_id, sequence, order_id, distance_from_previous
+                    )
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (route_id, sequence, db_order_id(csv_row), distance),
+                )
+            return route_id
+
+        fcfs_id = insert_route("FCFS", result["fcfs_route_indices"], result["fcfs_road"])
+        optimized_id = insert_route("OPTIMIZED", result["route_indices"], result["optimized_road"])
+        conn.commit()
+
+    return fcfs_id, optimized_id
+
+
 def _calculate_zoom(points):
     if not points:
         return 11
@@ -311,8 +379,19 @@ if run_btn:
         result["optimized_co2"] = result["co2_kg"]
         result["reroute_below_fcfs"] = result["optimized_distance"] < result["fcfs_distance"]
 
+        saved_fcfs_id, saved_optimized_id = save_demo_routes_to_db(
+            result,
+            fcfs_orders,
+            selected_batch["batch_id"],
+            selected_batch["vehicle_id"],
+        )
+        result["saved_fcfs_route_id"] = saved_fcfs_id
+        result["saved_optimized_route_id"] = saved_optimized_id
+
         st.session_state["optimization_result"] = result
-        st.success("Hệ thống tối ưu hóa hoàn tất dữ liệu hành trình!")
+        st.success(
+            f"Optimization completed · saved Route {saved_optimized_id} to database."
+        )
 
     except Exception as exc:
         st.error(f"Không thể thực thi tối ưu hóa: {exc}")
